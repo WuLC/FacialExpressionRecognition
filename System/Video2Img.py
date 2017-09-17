@@ -1,9 +1,12 @@
 # -*- coding: utf-8 -*-
 # @Author: lc
 # @Date:   2017-09-08 09:20:58
-# @Last Modified by:   lc
-# @Last Modified time: 2017-09-15 17:02:07
+# @Last Modified by:   WuLC
+# @Last Modified time: 2017-09-17 16:52:20
 
+import os
+os.environ['TF_CPP_MIN_LOG_LEVEL']='2'
+os.environ["CUDA_VISIBLE_DEVICES"] = '2' # decide to use CPU or GPU
 import time
 import json
 from datetime import datetime
@@ -57,7 +60,12 @@ class ProbabilityProducer():
 
 
 
-if __name__ == "__main__":
+def predict_and_label_frame():
+    """fetch original frame from kafka
+       detect whether there is human face in the frame
+       predict the emotion of the human face, label it on the image
+       then send it to kafka
+    """
     consumer = VideoConsumer()
     img_producer = ImageProducer()
     pro_producer = ProbabilityProducer()
@@ -123,3 +131,7 @@ if __name__ == "__main__":
                 pro_producer.send_probability_distribution(json.dumps(distribution).encode('utf8'))
             # img_producer.send_img(json.dumps(message).encode('utf8'))
             print('**********time consumed by prediction: {0}s'.format(time.time() - start_time))
+
+
+if __name__ == '__main__':
+    predict_and_label()
