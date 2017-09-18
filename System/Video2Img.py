@@ -1,12 +1,12 @@
 # -*- coding: utf-8 -*-
 # @Author: lc
 # @Date:   2017-09-08 09:20:58
-# @Last Modified by:   WuLC
-# @Last Modified time: 2017-09-17 16:52:20
+# @Last Modified by:   lc
+# @Last Modified time: 2017-09-18 21:50:04
 
 import os
 os.environ['TF_CPP_MIN_LOG_LEVEL']='2'
-os.environ["CUDA_VISIBLE_DEVICES"] = '2' # decide to use CPU or GPU
+os.environ["CUDA_VISIBLE_DEVICES"] = '0' # decide to use CPU or GPU
 import time
 import json
 from datetime import datetime
@@ -15,17 +15,19 @@ import cv2
 import numpy as np
 from kafka import KafkaConsumer, KafkaProducer
 
-from FaceProcessUtil import preprocessImage
+from FaceProcessUtilMultiFaces import preprocessImage
 from AlexNet import AlexNet
 from VGG import VGGModel
 
 
-SERVER = '125.216.242.154:9092'
-SERVER = '192.168.31.89:9092'
+SERVER = '127.0.0.1:9092'
 VIDEO_TOPIC = 'video'
 IMAGE_TOPIC = 'image'
 PROBABILITY_TOPIC = 'emotion_probability'
-EMOTION = ['neural', 'angry', 'surprise', 'disgust', 'fear', 'happy', 'sad']
+EMOTION = ('neural', 'angry', 'surprise', 'disgust', 'fear', 'happy', 'sad')
+COLOR_RGB = ((255, 0, 0), (0, 255, 0), (0, 0, 255), (255, 255, 0), (255, 0, 255), (0, 255, 255))
+COLOR_HEX = ('#FF0000', '#00FF00', '#0000FF', '#FFFF00', '#FF00FF', '#00FFFF')
+FONT = cv2.FONT_HERSHEY_SIMPLEX
 
 class VideoConsumer():
     def __init__(self):
@@ -60,22 +62,16 @@ class ProbabilityProducer():
 
 
 
-def predict_and_label_frame():
+def predict_and_label_frame(video_consumer, img_producer, probability_producer, model, maximum_detect_face = 6):
     """fetch original frame from kafka
        detect whether there is human face in the frame
        predict the emotion of the human face, label it on the image
        then send it to kafka
     """
-    consumer = VideoConsumer()
-    img_producer = ImageProducer()
-    pro_producer = ProbabilityProducer()
-    # model = AlexNet()
-    model = VGGModel()
-
     consume_count = 0
     produce_count = 0
     while True:
-        for img in consumer.get_img():
+        for img in video_consumer.get_img():
             start_time = time.time()
             consume_count += 1
             print('========Consume {0} from video stream'.format(consume_count))
@@ -93,28 +89,35 @@ def predict_and_label_frame():
             result = preprocessImage(np_img)
             print('**********time consumed by face detection: {0}s'.format(time.time() - start_time))
             start_time = time.time()
+            
             if result['detected']: # detect human face
                 produce_count += 1
-                emotion, probability_distribution = model.predict(result['rescaleimg'])
-                print('*****************probability_distribution: {0}'.format(probability_distribution))
-                # add square and text to the human face in the image
-                font = cv2.FONT_HERSHEY_SIMPLEX
-                color = (0,255,127)
-                left_top, right_bottom = result['rectPoints']
-                cv2.rectangle(np_img, left_top, right_bottom, color, 2)
-                text_left_bottom = (right_bottom[0], right_bottom[1] + 20)
-                cv2.putText(np_img, emotion, text_left_bottom, font, 1, color, 2)
-                
-                # cv2.imwrite('./text_imgs/img_{0}.jpg'.format(datetime.now().strftime("%Y%m%d%H%M%S")), np_img)
-                
-                
+                # deal with multiple face in an image
+                num_faces = min(maximum_detect_face, len(result['rescaleimg']))
+                face_imgs, face_points = result['rescaleimg'], result['originalPoints']
+                emotion_distributions = {}
+                for i in range(num_faces):
+                    emotion, probability_distribution = model.predict(face_imgs[i])
+                    distribution = dict(zip(EMOTION, probability_distribution.tolist()[0]))
+                    emotion_distributions[COLOR_HEX[i]] = distribution
+                    print('*****************probability_distribution: {0}'.format(probability_distribution))
+                    
+                    # add square and text to the human face in the image
+                    left_top, right_bottom = face_points[i]
+                    cv2.rectangle(np_img, left_top, right_bottom, COLOR_RGB[i], 2)
+                    text_left_bottom = (left_top[0], left_top[1] + 20)
+                    cv2.putText(np_img, emotion, text_left_bottom, FONT, 1, COLOR_RGB[i], 2)
+
+                    
+                # cv2.imwrite('./text_imgs/img_{0}.jpg'.format(datetime.now().strftime("%Y%m%d%H%M%S")), np_img)              
+                    
                 # send image to kafka
                 img_producer.send_img(cv2.imencode('.jpeg', np_img)[1].tostring())
                 print('#########produce {0} to image stream'.format(produce_count))
 
                 # send emotion probability distribution to kafka
-                distribution = dict(zip(EMOTION, probability_distribution.tolist()[0]))
-                pro_producer.send_probability_distribution(json.dumps(distribution).encode('utf8'))
+                    
+                probability_producer.send_probability_distribution(json.dumps(emotion_distributions).encode('utf8'))
                 print('#########produce {0} to probability stream'.format(distribution))
                 """
                 # send both image and distribution to kafka
@@ -127,11 +130,17 @@ def predict_and_label_frame():
                 # message = {'img': img, 'distribution': None}
                 img_producer.send_img(img)
                 print('#########produce raw image to image stream')
-                distribution = dict(zip(EMOTION, [0] * 7))
-                pro_producer.send_probability_distribution(json.dumps(distribution).encode('utf8'))
+                empty_distribution = {COLOR_HEX[0] : dict(zip(EMOTION, [0] * 7))}
+                probability_producer.send_probability_distribution(json.dumps(empty_distribution).encode('utf8'))
             # img_producer.send_img(json.dumps(message).encode('utf8'))
             print('**********time consumed by prediction: {0}s'.format(time.time() - start_time))
 
 
 if __name__ == '__main__':
-    predict_and_label()
+    video_consumer = VideoConsumer()
+    img_producer = ImageProducer()
+    probability_producer = ProbabilityProducer()
+    # model = AlexNet()
+    model = VGGModel()
+
+    predict_and_label_frame(video_consumer, img_producer, probability_producer, model)

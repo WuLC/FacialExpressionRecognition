@@ -2,7 +2,7 @@
 # @Author: lc
 # @Date:   2017-09-08 20:13:33
 # @Last Modified by:   lc
-# @Last Modified time: 2017-09-15 12:16:30
+# @Last Modified time: 2017-09-18 19:50:18
 
 import os
 os.environ['TF_CPP_MIN_LOG_LEVEL']='2'
@@ -12,7 +12,7 @@ import cv2
 import numpy as np 
 from keras.models import model_from_json
 
-MAPPING ={0:'neural', 1:'anger', 2:'surprise', 3:'disgust', 4:'fear', 5:'happy', 6:'sadness'}
+MAPPING = {0:'neural', 1:'angry', 2:'surprise', 3:'disgust', 4:'fear', 5:'happy', 6:'sad'}
 
 class AlexNet:
     def __init__(self,

@@ -2,14 +2,13 @@
 # @Author: lc
 # @Date:   2017-09-08 13:08:51
 # @Last Modified by:   lc
-# @Last Modified time: 2017-09-15 15:27:56
+# @Last Modified time: 2017-09-18 20:31:00
 
 import time 
 
 import cv2
 from flask import Flask, render_template, Response
 
-from camera import Camera
 from Consumer import ImageConsumer, ProbabilityConsumer
 
 
@@ -17,14 +16,8 @@ app = Flask(__name__)
 
 @app.route('/')
 def index():
-
     return render_template('index.html')
 
-def gen(camera):
-    while True:
-        frame = camera.get_frame()
-        yield (b'--frame\r\n'
-               b'Content-Type: image/jpeg\r\n\r\n' + frame + b'\r\n')
 
 def fetch_image():
     consumer = ImageConsumer()

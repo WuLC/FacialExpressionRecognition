@@ -1,7 +1,7 @@
 import cv2
 import numpy as np
 from kafka import KafkaProducer
-producer = KafkaProducer(bootstrap_servers="localhost:9092")
+producer = KafkaProducer(bootstrap_servers="127.0.0.1:9092")
 cv2.namedWindow('video')
 capture = cv2.VideoCapture(0)
 _, frame = capture.read()
@@ -22,7 +22,8 @@ while frame is not None:
         break
     """
     count += 1
-    if count % 10 == 0:
+    if count % 20 == 0:
+        print('send {0} frames, shape {1}'.format(count//10, frame.shape))
         producer.send('video', cv2.imencode('.jpeg', frame)[1].tostring())
     _, frame = capture.read()
-cv2.destroyWindow('Video')
+# cv2.destroyWindow('Video')

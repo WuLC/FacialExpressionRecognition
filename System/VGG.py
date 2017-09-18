@@ -3,7 +3,7 @@ import tensorflow as tf
 import cv2
 from FaceProcessUtil import preprocessImage as PPI
 
-MAPPING = {0:'neutral', 1:'anger', 2:'surprise', 3:'disgust', 4:'fear', 5:'happy', 6:'sadness'}
+MAPPING = {0:'neutral', 1:'angry', 2:'surprise', 3:'disgust', 4:'fear', 5:'happy', 6:'sad'}
 MP = './models/'
 m1shape=[None, 128,128,1]
 DEFAULT_PADDING = 'SAME'
