@@ -637,18 +637,6 @@ Outputs:
 ######
 #
 #The followings are for calibrate the image
-def __centerlist(list):
-    '''Return the center of a list of points'''
-    cx=0.0
-    cy=0.0
-    c=0.0
-    for i, v in enumerate(list):
-        c=c+1
-        cx=v[0]+cx
-        cy=v[1]+cy
-    cx=cx/c
-    cy=cy/c
-    return cx, cy
 def __RotateTranslate(image, angle, center =None, new_center =None, resample=IM.BICUBIC):
     '''Rotate the image according to the angle'''
     if center is None:  
@@ -674,11 +662,10 @@ def __RotaFace(image, eye_left=(0,0), eye_right=(0,0)):
     return image
 def __shape_to_np(shape):
     '''Transform the shape points into numpy array of 68*2'''
-    xy = []
-    for i in range(68):
-        xy.append((shape.part(i).x, shape.part(i).y,))
-    xy = np.asarray(xy, dtype='float32')
-    return xy
+    nLM = shape.num_parts
+    x = np.asarray([shape.part(i).x for i in range(0,nLM)])
+    y = np.asarray([shape.part(i).y for i in range(0,nLM)])
+    return x,y
 def calibrateImge(imgpath):
     '''Calibrate the image of the face'''
     imgcv_gray=cv2.imread(imgpath, cv2.IMREAD_GRAYSCALE)
@@ -695,16 +682,63 @@ def calibrateImge(imgpath):
             print("ONLY process the first face>>>>>>>>>")
             break
         shape = predictor(imgcv_gray, det)
-        xy = __shape_to_np(shape)
-        lmarks.append(xy)
+        x, y = __shape_to_np(shape)
     lmarks = np.asarray(lmarks, dtype='float32')
     pilimg=IM.fromarray(imgcv_gray)
-    rtimg=__RotaFace(pilimg, eye_left=__centerlist(lmarks[0][36:42]), eye_right=__centerlist(lmarks[0][42:48]))
+    rtimg=__RotaFace(pilimg, eye_left=(np.mean(x[36:42]),np.mean(y[36:42])),
+                                           eye_right=(np.mean(x[42:48]),np.mean(y[42:48])))
     imgcv_gray=np.array(rtimg)
     return True, imgcv_gray
 
 
-def calibrateImageWithArrayInput(img):
+
+### system module
+crop_size=0.7
+def __getLandMarkFeatures_and_ImgPatches_for_Facelist(img_list, withLM=True, withPatches=True):
+    """Input:
+    img_list: face image list to be processed.
+    withLM: flag indicates whether to process the landmark operations or not.
+    withPatches: flag indicates whether to process the patches operations or not.
+    fromfacedataset: flag whether the image is from cosine regular face dataset.
+        If fromfacedataset is set to True, always return an img.
+    
+Outputs: 
+    rescaleimg, lmf, lmfeat, pf, eyeP, middleP, mouthP
+    
+    rescaleimg: the rescale image of the input img
+    
+    lmf: landmark flag. If True means landmarks were detected in the images. If False means no landmarks were detected.
+    lmfeat: landmark features. If lmf is True, it is cosine ndarray, otherwise it is cosine None value.
+    
+    pf: patches flag, signal whether valid patches are return or not.
+    eyeP: if pf is True, it's cosine patch image of img, otherwise it's cosine None value.
+    middleP: if pf is True, it's cosine patch image of img, otherwise it's cosine None value.
+    mouthP: if pf is True, it's cosine patch image of img, otherwise it's cosine None value.
+    """
+    RT=[]
+    for img in img_list:
+        if len(img.shape) == 3 and img.shape[2]==3:
+            g_img = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+        else:
+            g_img = img
+
+        f_ds=detector(g_img, 1)
+        if len(f_ds) == 0:
+            #pl.write('0')
+            print(">>>***%%%Warning [getLandMarkFeatures_and_ImgPatches()]: No face was detected, and return None values")
+            RT.append(None)
+        else:
+            max_area=0
+            for i in range(len(f_ds)):
+                f_shape = predictor(g_img, f_ds[i])
+                curr_area = (f_ds[i].right()-f_ds[i].left()) * (f_ds[i].bottom()-f_ds[i].top())
+                if curr_area > max_area:
+                    max_area = curr_area
+                    rescaleimg, gf, geo_features, pf, eyepatch, foreheadpatch, mouthpatch, innerface=__cropImg(g_img, shape=f_shape, LM=withLM, Patches=withPatches, regularize=False)
+            RT.append((rescaleimg, gf, geo_features, pf, eyepatch, foreheadpatch, mouthpatch, innerface))
+    return RT
+
+def __calibrateImageWithArrayInput(img):
     '''Calibrate the image of the face'''
     if img is None:
         print('Unexpected ERROR: The value input is None. No image was loaded')
@@ -717,25 +751,60 @@ def calibrateImageWithArrayInput(img):
         print('ERROR: Unexpected data format.')
         return False, None
     dets = detector(imgcv_gray,1)
-
+    img_face_list=[]
+    rectPoint=[]
     if len(dets)==0:
         print("No face was detected^^^^^^^^^^^^^^")
-        return False, imgcv_gray, None
-    lmarks=[]
-    rectPoint=[]
+        return False, img_face_list, rectPoint
+    h=imgcv_gray.shape[0]
+    w=imgcv_gray.shape[1]
     for id, det in enumerate(dets):
         shape = predictor(imgcv_gray, det)
-        xy = __shape_to_np(shape)
-        lmarks.append(xy)
+        x, y = __shape_to_np(shape)
         top=[]
         top.append((det.left(),det.top()))
         top.append((det.right(),det.bottom()))
         rectPoint.append(top)
-    lmarks = np.asarray(lmarks, dtype='float32')
-    pilimg=IM.fromarray(imgcv_gray)
-    rtimg=__RotaFace(pilimg, eye_left=__centerlist(lmarks[0][36:42]), eye_right=__centerlist(lmarks[0][42:48]))
-    imgcv_gray=np.array(rtimg)
-    return True, imgcv_gray, rectPoint
+
+        #crop face
+        tlx=float(min(x))
+        tly=float(min(y))
+        ww=float(max(x)-tlx)
+        hh=float(max(y)-tly)
+        cx=tlx+ww/2
+        cy=tly+hh/2
+        tsize=ww*crop_size
+        # Approximate expanded bounding box
+        btlx = int(round(cx - rescaleImg[0]*tsize))
+        btly = int(round(cy - rescaleImg[1]*tsize))
+        bbrx = int(round(cx + rescaleImg[2]*tsize))
+        bbry = int(round(cy + rescaleImg[3]*tsize))
+        nw = int(bbrx-btlx)
+        nh = int(bbry-btly)
+        imcrop = np.zeros((nh,nw), dtype = "uint8")
+        blxstart = 0
+        if btlx < 0:
+            blxstart = -btlx
+            btlx = 0
+        brxend = nw
+        if bbrx > w:
+            brxend = w+nw - bbrx#brxend=nw-(bbrx-w)
+            bbrx = w
+        btystart = 0
+        if btly < 0:
+            btystart = -btly
+            btly = 0
+        bbyend = nh
+        if bbry > h:
+            bbyend = h+nh - bbry#bbyend=nh-(bbry-h)
+            bbry = h
+        imcrop[btystart:bbyend, blxstart:brxend] = imgcv_gray[btly:bbry, btlx:bbrx]
+        pilimg=IM.fromarray(imcrop)
+        rtimg=__RotaFace(pilimg, eye_left=(np.mean(x[36:42]),np.mean(y[36:42])),
+                                           eye_right=(np.mean(x[42:48]),np.mean(y[42:48])))
+        img_face_list.append(np.array(rtimg))
+
+    return True, img_face_list, rectPoint
 
 def preprocessImage(img):
     """process image as input for model, extract all human faces in the image and their corresponding coordinate points
@@ -765,66 +834,24 @@ def preprocessImage(img):
         cropped = True
         print('cropping image........')
         img = img[left_top[0] : right_bottom[0], left_top[1] : right_bottom[1], 0]
-        cv2.imwrite('./crop_imgs/crop_{0}.jpeg'.format(datetime.now().strftime("%Y%m%d%H%M%S")), img)
-        # img = cv2.resize(img, ())
+        # cv2.imwrite('./crop_imgs/crop_{0}.jpeg'.format(datetime.now().strftime("%Y%m%d%H%M%S")), img)
     
-    # packed the features and return   
+    # pack the features and return   
     features = {}
-    detected, imgGray, originalPoints = calibrateImageWithArrayInput(img)
+    detected, face_list, originalPoints = __calibrateImageWithArrayInput(img)
     features['detected'] = detected
     if detected: # detect human face
-        processedFeature = getLandMarkFeatures_and_ImgPatches(imgGray, False, False, False)
-        print('detect {0} human faces'.format(len(processedFeature)))
+        processedFeature = __getLandMarkFeatures_and_ImgPatches_for_Facelist(face_list, False, False)
         
-        rescaleimg, rotatedPoints = [], []
+        rescaleimg, detectedOriginalPoints = [], []
         for i in range(len(processedFeature)):
-            # order of features
-            # rescaleimg, gf, geo_features, pf, eyepatch, foreheadpatch, mouthpatch, innerface, rotatedPoints 
-            rescaleimg.append(processedFeature[i][0])
-            rotatedPoints.append(processedFeature[i][-1])
+            if processedFeature[i]:
+                # order of features
+                # rescaleimg, gf, geo_features, pf, eyepatch, foreheadpatch, mouthpatch, innerface, rotatedPoints 
+                rescaleimg.append(processedFeature[i][0].reshape(1, 128, 128, 1))
+                detectedOriginalPoints.append(originalPoints[i])
 
-        # map the rotatedPoints with the originalPoints
-        # print('originalPoints\n', originalPoints)
-        # print('rotatedPoints\n', rotatedPoints)
-        try:
-            assert len(originalPoints) == len(rotatedPoints), 'the number of original points and rotated points do not equal'
-        except Exception:
-            if len(originalPoints) == 0 or len(rotatedPoints) == 0:
-                print('the number of original points or rotated points is 0, skip frame')
-                features['detected'] = False
-                return features
-
-        originalCenterPoints = [((p[0][0] + p[1][0])/2, (p[0][1] + p[1][1])/2) for p in originalPoints]
-        rotatedCenterPoints = [((p[0][0] + p[1][0])/2, (p[0][1] + p[1][1])/2) for p in rotatedPoints]
-        distance = lambda p1, p2 : math.sqrt((p1[0] - p2[0])**2 + (p1[1] - p2[1])**2)
-        correct_indices = []
-
-        # the number of original points and rotated points may not equal, choose the minimum one
-        if len(rotatedCenterPoints) <= len(originalCenterPoints):
-            for i in range(len(rotatedCenterPoints)):
-                min_distance, idx = None, None
-                for j in range(len(originalCenterPoints)):
-                    curr_distance = distance(rotatedCenterPoints[i], originalCenterPoints[j])
-                    if idx == None or curr_distance < min_distance:
-                        idx = j
-                        min_distance = curr_distance
-                correct_indices.append(idx)
-            originalPoints = [originalPoints[idx] for idx in correct_indices]
-            rescaleimg = [img.reshape(1, 128, 128, 1) for img in rescaleimg] # reshape face image as input to model
-        else:
-            for i in range(len(originalCenterPoints)):
-                min_distance, idx = None, None
-                for j in range(len(rotatedCenterPoints)):
-                    curr_distance = distance(originalCenterPoints[i], rotatedCenterPoints[j])
-                    if idx == None or curr_distance < min_distance:
-                        idx = j
-                        min_distance = curr_distance
-                correct_indices.append(idx)
-                rescaleimg = [rescaleimg[idx].reshape(1, 128, 128, 1) for idx in correct_indices] # reshape face image as input to model
-
-
-        assert len(set(correct_indices)) == min(len(rotatedPoints), len(originalPoints)), 'fail to map the original points with rotated points'
-        # print('originalPoints mapping with rotatedPoints\n {0}'.format([originalPoints[idx] for idx in correct_indices]))
+        print('detect {0} human faces'.format(len(detectedOriginalPoints)))
         
         # save the cropped image
         # print('cropping img with face to shape {0}'.format(img.shape))
@@ -833,15 +860,15 @@ def preprocessImage(img):
         # if cropping image, move the square surrounding human face to the right place 
         if cropped:
             tmp = []
-            for face in originalPoints:
+            for face in detectedOriginalPoints:
                 modified_left_top = (face[0][0] + left_top[1], face[0][1] + left_top[0])
                 modified_right_bottom = (face[1][0] + left_top[1], face[1][1] + left_top[0])
                 tmp.append((modified_left_top, modified_right_bottom))
-            originalPoints = tmp
+            detectedOriginalPoints = tmp
         
-        assert len(rescaleimg) == len(originalPoints), 'the number of human faces do not equal the number of face points'
+        assert len(rescaleimg) == len(detectedOriginalPoints), 'the number of human faces do not equal the number of face points'
         features['rescaleimg'] = rescaleimg
-        features['originalPoints'] = originalPoints
+        features['originalPoints'] = detectedOriginalPoints
     return features
     
 
