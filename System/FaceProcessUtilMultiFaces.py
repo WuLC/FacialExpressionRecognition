@@ -763,8 +763,9 @@ def preprocessImage(img):
     r, c, ch = img.shape
     if r >= right_bottom[0] and c >= right_bottom[1]:
         cropped = True
+        print('cropping image........')
         img = img[left_top[0] : right_bottom[0], left_top[1] : right_bottom[1], 0]
-        # cv2.imwrite('./crop_imgs/crop_{0}.jpeg'.format(datetime.now().strftime("%Y%m%d%H%M%S")), img)
+        cv2.imwrite('./crop_imgs/crop_{0}.jpeg'.format(datetime.now().strftime("%Y%m%d%H%M%S")), img)
         # img = cv2.resize(img, ())
     
     # packed the features and return   
