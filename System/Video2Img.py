@@ -2,7 +2,7 @@
 # @Author: lc
 # @Date:   2017-09-08 09:20:58
 # @Last Modified by:   lc
-# @Last Modified time: 2017-09-18 21:50:04
+# @Last Modified time: 2017-09-19 21:30:35
 
 import os
 os.environ['TF_CPP_MIN_LOG_LEVEL']='2'
@@ -25,8 +25,8 @@ VIDEO_TOPIC = 'video'
 IMAGE_TOPIC = 'image'
 PROBABILITY_TOPIC = 'emotion_probability'
 EMOTION = ('neural', 'angry', 'surprise', 'disgust', 'fear', 'happy', 'sad')
-COLOR_RGB = ((255, 0, 0), (0, 255, 0), (0, 0, 255), (255, 255, 0), (255, 0, 255), (0, 255, 255))
-COLOR_HEX = ('#FF0000', '#00FF00', '#0000FF', '#FFFF00', '#FF00FF', '#00FFFF')
+COLOR_RGB = ((0, 255, 0), (255, 0, 0), (0, 0, 255), (0, 255, 255), (255, 0, 255), (255, 255, 0))
+COLOR_HEX = ('#00FF00', '#0000FF', '#FF0000', '#FFFF00', '#FF00FF', '#00FFFF')
 FONT = cv2.FONT_HERSHEY_SIMPLEX
 
 class VideoConsumer():
@@ -59,7 +59,6 @@ class ProbabilityProducer():
 
     def send_probability_distribution(self, msg):
         self.producer.send(PROBABILITY_TOPIC, value = msg)
-
 
 
 def predict_and_label_frame(video_consumer, img_producer, probability_producer, model, maximum_detect_face = 6):
@@ -105,11 +104,11 @@ def predict_and_label_frame(video_consumer, img_producer, probability_producer, 
                     # add square and text to the human face in the image
                     left_top, right_bottom = face_points[i]
                     cv2.rectangle(np_img, left_top, right_bottom, COLOR_RGB[i], 2)
-                    text_left_bottom = (left_top[0], left_top[1] + 20)
+                    text_left_bottom = (left_top[0], left_top[1] - 20)
                     cv2.putText(np_img, emotion, text_left_bottom, FONT, 1, COLOR_RGB[i], 2)
 
                     
-                # cv2.imwrite('./text_imgs/img_{0}.jpg'.format(datetime.now().strftime("%Y%m%d%H%M%S")), np_img)              
+                # cv2.imwrite('./test_imgs/img_{0}.jpg'.format(datetime.now().strftime("%Y%m%d%H%M%S")), np_img)              
                     
                 # send image to kafka
                 img_producer.send_img(cv2.imencode('.jpeg', np_img)[1].tostring())
@@ -118,7 +117,7 @@ def predict_and_label_frame(video_consumer, img_producer, probability_producer, 
                 # send emotion probability distribution to kafka
                     
                 probability_producer.send_probability_distribution(json.dumps(emotion_distributions).encode('utf8'))
-                print('#########produce {0} to probability stream'.format(distribution))
+                print('#########produce {0} to probability stream'.format(emotion_distributions))
                 """
                 # send both image and distribution to kafka
                 message = []

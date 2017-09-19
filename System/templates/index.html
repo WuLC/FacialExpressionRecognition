@@ -26,16 +26,51 @@
       }
       function redraw(raw_data){
         //console.log(raw_data)
-        var data = []
-        for(var i=0;i<xAxisData.length;i++){
-           console.log(xAxisData[i])
-           console.log(raw_data[xAxisData[i]])
-           if(raw_data[xAxisData[i]]==undefined){
+        var items = []
+        var colors = []
+        for(var key in raw_data){
+          colors.push(key)
+          console.log(key)
+          var data = []
+          var maxs = []
+          var item = raw_data[key]
+          for(var i=0;i<xAxisData.length;i++){
+           //console.log(xAxisData[i])
+           console.log(item)
+           if(item[xAxisData[i]]==undefined){
              data.push(0)
            }else{
-             data.push(raw_data[xAxisData[i]])
+             data.push(item[xAxisData[i]])
            }
-        }
+           maxs.push(1)
+          }
+          items.push({
+                // 辅助系列
+                type: 'bar',
+                silent: true,
+                yAxisIndex: 1,
+                itemStyle: {
+                    normal: {
+                        barBorderRadius: 8,
+                        color: '#ddd'      
+                    }
+                },
+                barWidth: 18,
+                data:maxs
+            }, {
+                type: 'bar',
+                data: data,
+                barWidth: 16,
+                itemStyle: {
+                    normal: {
+                        barBorderRadius: 8,
+                        color: key,
+                        shadowColor: 'rgba(0, 0, 0, 0.4)',
+                        shadowBlur: 20
+                    }
+                }
+            })
+       }
         //console.log(data)
         var option = {
             title: {
@@ -47,6 +82,7 @@
             grid:{
               left:150
             },
+            color:colors,
             yAxis: [{
                 data: xAxisData,
                 axisLabel: {
@@ -85,34 +121,35 @@
                     show:false
                 }
             },
-            series: [{
-                // 辅助系列
-                type: 'bar',
-                silent: true,
-                yAxisIndex: 1,
-                itemStyle: {
-                    normal: {
-                        barBorderRadius: 8,
-                        color: '#ddd'      
-                    }
-                },
-                barWidth: 18,
-                data: data.map(function (val) {
-                    return 1;
-                })
-            }, {
-                type: 'bar',
-                data: data,
-                barWidth: 16,
-                itemStyle: {
-                    normal: {
-                        barBorderRadius: 8,
-                        color: '#03a9f4',
-                        shadowColor: 'rgba(0, 0, 0, 0.4)',
-                        shadowBlur: 20
-                    }
-                }
-            }]
+            series:items
+            // series: [{
+            //     // 辅助系列
+            //     type: 'bar',
+            //     silent: true,
+            //     yAxisIndex: 1,
+            //     itemStyle: {
+            //         normal: {
+            //             barBorderRadius: 8,
+            //             color: '#ddd'      
+            //         }
+            //     },
+            //     barWidth: 18,
+            //     data: data.map(function (val) {
+            //         return 1;
+            //     })
+            // }, {
+            //     type: 'bar',
+            //     data: data,
+            //     barWidth: 16,
+            //     itemStyle: {
+            //         normal: {
+            //             barBorderRadius: 8,
+            //             color: '#03a9f4',
+            //             shadowColor: 'rgba(0, 0, 0, 0.4)',
+            //             shadowBlur: 20
+            //         }
+            //     }
+            // }]
             }
         mychart.setOption(option)
       
@@ -124,7 +161,7 @@
       position:relative;
     }
     #chart{
-      height:600px;
+      height:840px;
       width:800px;
     }
     </style>
@@ -135,11 +172,9 @@
 	    	<h1>Facial Expression Recognition</h1>
 	    	<img src="{{ url_for('video_feed') }}">
 	    </center>
-        
     </div>
     <div>
 	  	<center>
-        <h1>Historgram</h1>
 	    	<div id="chart"></div>
 	    </center>
     </div>

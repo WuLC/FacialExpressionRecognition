@@ -873,5 +873,5 @@ def preprocessImage(img):
     
 
 if __name__ == '__main__':
-    test_image = './test_imgs/test_multiface1.jpg'
+    test_image = './test_imgs/test_multiface.jpg'
     preprocessImage(cv2.imread(test_image))
