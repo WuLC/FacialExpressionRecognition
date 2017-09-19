@@ -738,15 +738,15 @@ def calibrateImageWithArrayInput(img):
     return True, imgcv_gray, rectPoint
 
 def preprocessImage(img):
-    """process image as input for model
+    """process image as input for model, extract all human faces in the image and their corresponding coordinate points
         
     Args:
         img (ndarray): input image represent in numpy.ndarray
     
     Returns: a dictionnary contains the following information
-        detected(boolean): bool type to indicates whether the there is a face in the input
-        rectPoints(list): a list contains two points called by rectPoints[0] and rectPoints[1] respectively; Or it is a None value
-        rescaleimg(ndarray): rescaled and croped image of the detected face
+        detected(boolean): bool type to indicates whether the there are human faces in the input
+        rescaleimg(list of ndarray): a list of rescaled and cropped image of the detected face
+        originalPoints(list of tuple): a list tuple corresponding to rescaleimg, each tuple contains tow points that represent human faces
         gf: bool type for geometry features flag, indicating whether there would be meaning values in geo_features or a just a None value
         geo_features: geometryf features or None value
         pf: bool type indicates whether the following features are meaningful or meaningless
