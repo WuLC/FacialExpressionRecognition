@@ -11,7 +11,7 @@
       var timer;
       start_poll()
       function start_poll(){
-        mychart = echarts.init(document.getElementById('chart'))
+       
         timer = window.setInterval(function(){
           $.ajax({
             url:'/historgram',
@@ -25,18 +25,20 @@
         },200)
       }
       function redraw(raw_data){
-        //console.log(raw_data)
+        console.log(raw_data)
+        
         var items = []
         var colors = []
         for(var key in raw_data){
           colors.push(key)
-          console.log(key)
+          //console.log(key)
           var data = []
           var maxs = []
           var item = raw_data[key]
+          //console.log(item)
           for(var i=0;i<xAxisData.length;i++){
            //console.log(xAxisData[i])
-           console.log(item)
+           
            if(item[xAxisData[i]]==undefined){
              data.push(0)
            }else{
@@ -48,19 +50,19 @@
                 // 辅助系列
                 type: 'bar',
                 silent: true,
-                yAxisIndex: 1,
+                xAxisIndex: 1,
                 itemStyle: {
                     normal: {
                         barBorderRadius: 8,
                         color: '#ddd'      
                     }
                 },
-                barWidth: 18,
+                barWidth: 20,
                 data:maxs
             }, {
                 type: 'bar',
                 data: data,
-                barWidth: 16,
+                barWidth: 20,
                 itemStyle: {
                     normal: {
                         barBorderRadius: 8,
@@ -83,7 +85,7 @@
               left:150
             },
             color:colors,
-            yAxis: [{
+            xAxis: [{
                 data: xAxisData,
                 axisLabel: {
                     textStyle: {
@@ -106,7 +108,7 @@
                 show: false,
                 data: xAxisData  
             }],
-            xAxis: {
+            yAxis: {
                 max: 1,
                 axisLine: {
                     show: false
@@ -151,8 +153,8 @@
             //     }
             // }]
             }
+        mychart = echarts.init(document.getElementById('chart'))
         mychart.setOption(option)
-      
       }
     })
     </script>
@@ -161,8 +163,8 @@
       position:relative;
     }
     #chart{
-      height:840px;
-      width:800px;
+      height:400px;
+      width:1600px;
     }
     </style>
   </head>
