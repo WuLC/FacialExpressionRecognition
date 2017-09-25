@@ -1,8 +1,8 @@
 # -*- coding: utf-8 -*-
 # @Author: lc
 # @Date:   2017-09-08 09:20:58
-# @Last Modified by:   WuLC
-# @Last Modified time: 2017-09-21 17:19:35
+# @Last Modified by:   lc
+# @Last Modified time: 2017-09-25 14:56:19
 
 
 #######################################################################
@@ -19,17 +19,19 @@ os.environ["CUDA_VISIBLE_DEVICES"] = '1' # decide to use CPU or GPU
 import time
 import json
 from datetime import datetime
+from multiprocessing import Pool
 
 import cv2
 import numpy as np
 from kafka import KafkaConsumer, KafkaProducer
 
 from FaceProcessUtilMultiFaces import preprocessImage
-from AlexNet import AlexNet
+#from AlexNet import AlexNet
 from VGG import VGGModel
-from Recorder import FileRecorder
+from Recorder import FileRecorder, RedisRecorder
 
 SERVER = '127.0.0.1:9092'
+SERVER = '125.216.242.158:9092'
 VIDEO_TOPIC = 'video'
 IMAGE_TOPIC = 'image'
 PROBABILITY_TOPIC = 'emotion_probability'
@@ -69,8 +71,13 @@ class ProbabilityProducer():
     def send_probability_distribution(self, msg):
         self.producer.send(PROBABILITY_TOPIC, value = msg)
 
+global_model = VGGModel()
+def predict(face_img):
+    global global_model
+    return global_model.predict(face_img) # (emotion, probability_distribution)
 
-def predict_and_label_frame(video_consumer , img_producer, probability_producer, file_recorder, model, maximum_detect_face = 6):
+
+def predict_and_label_frame(video_consumer , img_producer, probability_producer, recorder, pool, maximum_detect_face = 6):
     """fetch original frame from kafka with video_consumer
        detect whether there are human faces in the frame
        predict the emotions of  human faces, label them on the image
@@ -104,25 +111,24 @@ def predict_and_label_frame(video_consumer , img_producer, probability_producer,
                 num_faces = min(maximum_detect_face, len(result['rescaleimg']))
                 face_imgs, face_points = result['rescaleimg'], result['originalPoints']
                 emotion_distributions = {}
+                # use multiple processes to predict
+                # predicted_results = pool.map(predict, face_imgs)
+                predicted_results = [pool.apply(predict, args = (face_imgs[i], )) for i in range(num_faces)]
                 for i in range(num_faces):
-                    emotion, probability_distribution = model.predict(face_imgs[i])
+                    emotion, probability_distribution = predicted_results[i]
                     distribution = dict(zip(EMOTION, probability_distribution.tolist()[0]))
                     emotion_distributions[COLOR_HEX[i]] = distribution
                     print('*****************probability_distribution: {0}'.format(probability_distribution))
                     
-                    """
-                    # write the record on disk
-                    batch, width, height, channel = face_imgs[i].shape
-                    str_img = ' '.join(map(lambda x: str(x), face_imgs[i].reshape(width * height)))
-                    label = EMOTION.index(emotion)
-                    file_recorder.write_record(str_img, label)
-                    """
-                    
+                    # write the record to redis     
+                    recorder.write_record(face_imgs[i].tostring(), emotion)
+
                     # add square and text to the human face in the image
                     left_top, right_bottom = face_points[i]
                     cv2.rectangle(np_img, left_top, right_bottom, COLOR_RGB[i], 2)
                     text_left_bottom = (left_top[0], left_top[1] - 20)
                     cv2.putText(np_img, emotion, text_left_bottom, FONT, 1, COLOR_RGB[i], 2)
+
                 print('**********time consumed by predicting, storing and texting image: {0}s'.format(time.time() - start_time))
                     
                 # cv2.imwrite('./test_imgs/img_{0}.jpg'.format(datetime.now().strftime("%Y%m%d%H%M%S")), np_img)              
@@ -148,13 +154,14 @@ if __name__ == '__main__':
     video_consumer = VideoConsumer()
     img_producer = ImageProducer()
     probability_producer = ProbabilityProducer()
-    record_dir = './detected_records/'
-    file_recorder = FileRecorder(record_dir)
+    recorder = RedisRecorder()
+    pool = Pool(2)
+    # record_dir = './detected_records/'
+    # file_recorder = FileRecorder(record_dir)
     # model = AlexNet()
-    model = VGGModel()
 
     predict_and_label_frame(video_consumer = video_consumer, 
                             img_producer = img_producer, 
                             probability_producer = probability_producer, 
-                            file_recorder = file_recorder,
-                            model = model)
+                            recorder = recorder,
+                            pool = pool)
