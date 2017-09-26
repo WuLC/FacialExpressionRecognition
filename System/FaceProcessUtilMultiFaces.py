@@ -7,6 +7,7 @@ import dlib
 import numpy as np
 from PIL import Image as IM
 from scipy import ndimage
+#import time
 # --------------------------------------------------------------------------- #
 # Usage: python facepatches.py <inputDir> <outputDir>
 # --------------------------------------------------------------------------- #
@@ -31,13 +32,13 @@ finalsize=(224,224)
 
 '''all three patches must be the same size if they are to be concatenated in the patch network'''
 eye_patch_size = (64, 26)
-eye_width_height_ratio = 0.40625 #alternative 0.5-0.6 including forehead
-middle_width_height_ratio = 1.25
+eye_height_width_ratio = 0.40625 #alternative 0.5-0.6 including forehead
+#middle_height_width_ratio = 1.25
 #middle_patch_size = (32, 40)
-middle_patch_size = (64, 26)#
-mouth_width_height_ratio = 0.5
-#mouth_patch_size = (48, 24)
-mouth_patch_size = (64, 26)
+middle_height_width_ratio = 1.75
+middle_patch_size = (28, 49)
+mouth_width_height_ratio = 1.8
+mouth_patch_size = (54, 30)
 
 ##LMP1_keys=[17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 27]
 LMP1_keys=[17, 19, 21, 26, 24, 22, 37, 41, 44, 46, 27]
@@ -46,6 +47,8 @@ LMP1_Dists=[[37,41],[41,19],[37,19],[41,21],[37,21],[39,19],[39,21],
                       #[21,22],[21,27],[22,27]] not helpful
 LMP1_triangle=[[17, 19, 21], [17, 19, 27], [27, 37, 41], [41, 19, 27], [41, 17, 21], [41, 21, 27], [17, 41, 27], 
                            [26, 24, 22], [26, 24, 27], [27, 44, 46], [46, 24, 27], [46, 26, 22], [46, 22, 27], [26, 46, 27]]
+#LMP1_triangle=[[17, 19, 21], [17, 19, 27], [27, 37, 41], [41, 19, 27], [41, 17, 21], [27, 21, 41], [17, 41, 27], 
+#                           [26, 24, 22], [26, 24, 27], [27, 44, 46], [46, 24, 27], [46, 26, 22], [27, 22, 46], [26, 46, 27]]
 #LMP1_aug=[[37,38],[37,39],[38,39],
 #                    [44,43],[44,42],[33,42]]  #not helpful
 #LMP1_aug=[[17,19],[19,21],
@@ -57,10 +60,13 @@ LMP2_Dists=[[51,57],[62,66],[49,59],[53,55]]
                       #[54,53],[54,51],[53,51]] not helpful
 '''the order of three points in a triangle should be considered
  by making the outcoming triangle features share bigger variance'''
-LMP2_triangle=[[4, 5, 48], [12, 11, 54], [51, 57, 48], 
-                           [51, 57, 54], [62, 66, 48], [62, 66, 54],
-                           [4, 5, 66], [12, 11, 66], [4, 5, 51], [12, 11, 51],
-                           [4, 5, 62], [12, 11, 62], [4, 5, 57], [12, 11, 57]]
+#LMP2_triangle=[[4, 5, 48], [12, 11, 54], [62, 66, 48], [62, 66, 54],
+#                           [4, 5, 66], [12, 11, 66], [4, 5, 51], [12, 11, 51],[4, 5, 62], [12, 11, 62]
+#                           , [51, 57, 48], [51, 57, 54], [4, 5, 57], [12, 11, 57]]
+LMP2_triangle=[[4, 5, 48], [12, 11, 54], [62, 66, 48], [62, 66, 54],
+                           [4, 5, 66], [12, 11, 66], [4, 5, 51], [12, 11, 51],[4, 5, 62], [12, 11, 62]
+                           , [51, 57, 48], [51, 57, 54], [4, 5, 57], [12, 11, 57]
+                           ,[62,66,12],[62,66,4],[62,66,11],[62,66,5]]
 #LMP2_triangle=[[48, 5, 4], [54, 11, 12], [48, 57, 51], 
 #                           [54, 57, 51], [48, 66, 62], [54, 66, 62],
 #                           [66, 5, 4], [66, 11, 12], [51, 4, 5], [51, 11, 12],
@@ -84,19 +90,20 @@ def __getEyePatch(img, w, h, X=None, Y=None):
     '''Return the eye patch image from the rescaled images'''
     if X is None or Y is None:###use default configs for unexpected cases. this could be strongly unstable.
         w_patch = int(round(w*0.734375))
-        h_patch = int(round(w_patch*eye_width_height_ratio))
-        bry = int(round(h*0.5))
+        h_patch = int(round(w_patch*eye_height_width_ratio))
+        bry = int(mpoint[1]+round(h_patch*0.5))
         tlx = int(round(w-w_patch)*0.5)
         brx = tlx+w_patch
         tly = bry-h_patch
     else:
         half_width = int(max((X[27]-(X[0]+X[17])/2), ((X[16]+X[26])/2-X[27])))
         w_patch = 2*half_width
-        h_patch = int(round(w_patch*eye_width_height_ratio))
-
-        bry = int(round((Y[28]+Y[29])*0.5))
-        tly = bry - h_patch
-        tlx = int(X[27]-half_width)
+        h_patch = int(round(w_patch*eye_height_width_ratio))
+        cx = np.mean(np.concatenate([X[17:27],X[36:48]]))
+        cy = np.mean(np.concatenate([Y[17:27],Y[36:48]]))
+        tly = int(round(cy-h_patch/2))
+        bry = tly+h_patch
+        tlx = int(round(cx-half_width))
         brx = tlx + w_patch
     
     #patch = np.zeros((h_patch, w_patch, 3), dtype = "uint8")
@@ -126,9 +133,9 @@ def __getEyePatch(img, w, h, X=None, Y=None):
 def __getMiddlePatch(img, w, h, X=None, Y=None):
     '''Return the middle patch image from the rescaled images'''
     if X is None or Y is None:###use default configs for unexpected cases. this could be strongly unstable.
-        w_patch = int(round(w*0.3125))
-        h_patch = int(round(w_patch*middle_width_height_ratio))
-        bry = int(round(h*0.46875))
+        w_patch = int(round(w*0.25))
+        h_patch = int(round(w_patch*middle_height_width_ratio))
+        bry = int(round(h*0.40625))# starts at 52th row in 128x128
         tlx = int(round(w-w_patch)*0.5)
         brx = tlx+w_patch
         tly = bry-h_patch
@@ -136,8 +143,8 @@ def __getMiddlePatch(img, w, h, X=None, Y=None):
         tlx = int(X[39])
         brx = int(X[42])
         w_patch = brx - tlx
-        h_patch = int(round(w_patch*middle_width_height_ratio))
-        bry = int(Y[28])
+        bry = int((Y[28]+Y[29])/2)
+        h_patch = int(round(w_patch*middle_height_width_ratio))
         tly = bry - h_patch
     #patch = np.zeros((h_patch, w_patch, 3), dtype = "uint8")
     patch = np.zeros((h_patch, w_patch), dtype = "uint8")
@@ -166,19 +173,24 @@ def __getMiddlePatch(img, w, h, X=None, Y=None):
 def __getMouthPatch(img, w, h, X=None, Y=None):
     '''Return the mouth patch image from the rescaled images'''
     if X is None or Y is None:###use default configs for unexpected cases. this could be strongly unstable.
-        w_patch = int(round(w*0.5))
-        h_patch = int(round(w_patch*mouth_width_height_ratio))
-        bry = int(round(h*0.671875))
+        w_patch = int(round(w*0.421875))
+        h_patch = int(round(w_patch/mouth_width_height_ratio))
+        tly = int(round(h*0.59375))#starts at 76th row in 128x128
         tlx = int(round(w-w_patch)*0.5)
         brx = tlx+w_patch
-        tly = bry-h_patch
+        bry = tly+h_patch
     else:
-        h_patch = int(round(Y[8]-Y[33]))
-        w_patch = int(h_patch/mouth_width_height_ratio)
-        tly = int(Y[33])
-        bry = tly + h_patch
-        tlx = int(X[33]-w_patch/2)
-        brx = tlx + w_patch
+        up_h_patch = int(round(Y[8]-Y[33])/3)#upheight, two of the five
+        w_patch = int(up_h_patch*2.25)#half width=up_h_patch*2.5*mouth_width_height_ratio/2=up_h_patch*
+        cx=int(np.mean(X[48:68]))
+        cy=int(np.mean(Y[48:68]))
+        tly = cy-up_h_patch
+        tlx = cx-w_patch
+        h_patch = int(round(up_h_patch*2.5))#
+        w_patch = w_patch*2
+        bry=tly+h_patch
+        brx=tlx+w_patch
+
     #patch = np.zeros((h_patch, w_patch, 3), dtype = "uint8")
     patch = np.zeros((h_patch, w_patch), dtype = "uint8")
 
@@ -392,6 +404,32 @@ def __getXYcor(X, Y):
     #yc=list(yc[17:27])+list(yc[36:])#87.0875
     return list(xc),list(yc)
 
+def __getLocalCordSetAnalysis(X, Y):
+    assert len(X)==len(Y), 'Unexpected lengths between X and Y'
+    cx = np.mean(X)
+    cy = np.mean(Y)
+    nX = X-cx
+    nY = Y-cy
+    nD = nX[:]#initialized
+    cos = nX[:]#initialized
+    sin = nY[:]#initialized
+    for i in range(len(nX)):
+        nD[i]=__getD(nX[i], nY[i], cx, cy)
+        #if nD[i]>0:
+        #    cos[i]=cos[i]/nD[i]
+        #    sin[i]=sin[i]/nD[i]
+        #else:
+        #    cos[i]=0
+        #    sin[i]=0
+    #met=np.std(nD)
+    #nX=nX/met
+    #nY=nY/met
+    nD=nD/np.max(nD)
+    #return (list(nD)+list(cos)+list(sin))
+    #return list(nD)
+    return (list(nD)+list(nX)+list(nY))
+
+
 def __landmarkPart1(X, Y, stdxy):
     '''Return Part1(eyes part) features'''
     part1=[]
@@ -440,7 +478,18 @@ def __LandmarkFeaturesV2(X, Y):
     part1, tri_f1, ed1=__landmarkPart1(X, Y, stdxy)
     part2, tri_f2, ed2=__landmarkPart2(X, Y, stdxy)
     x, y = __getXYcor(X, Y)
-    features=part1+part2+tri_f1+tri_f2+ed1+ed2+x+y
+    #features=part1+part2+tri_f1+tri_f2+ed1+ed2+x+y###Dx55  236
+    
+    #getlocalCordSetAna
+    l_eye=__getLocalCordSetAnalysis(np.concatenate([X[17:22],X[36:42]]),
+                                                  np.concatenate([Y[17:22],Y[36:42]]))
+    r_eye=__getLocalCordSetAnalysis(np.concatenate([X[22:27],X[42:48]]),
+                                                   np.concatenate([Y[22:27],Y[42:48]]))
+    m=__getLocalCordSetAnalysis(X[48:68],Y[48:68])
+    #features=part1+part2+tri_f1+tri_f2+ed1+ed2+x+y+l_eye+r_eye+m
+    features=tri_f1+tri_f2+ed1+ed2+x+y+l_eye+r_eye+m#Dx63
+    #features=part1+part2+tri_f1+tri_f2+ed1+ed2+l_eye+r_eye+m#Dx64
+
     print('Geometry feature length: %d'%len(features))
     return features
 
@@ -466,7 +515,8 @@ def __UnifiedOutputs(rescaleImg, Geof, Geo_features, Patchf, eyepatch, foreheadp
 def __genLMFandIP(img, w, h, LM, Patches, regular=False, X=None, Y=None):
     """Return the Geometry features from landmarks and Images patches.
     If regularize is set to False, it will always return cosine True and three images for the patches operation.
-    Otherwise, it could return cosine False and four None values"""
+    Otherwise, it could return cosine False and four None values
+    X and Y are ndarray"""
     if LM or Patches:
         if X is None or Y is None:
             #pl.write(' 0\n')
@@ -612,28 +662,27 @@ Outputs:
         g_img = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
     else:
         g_img = img
-
-    f_ds=detector(g_img, 1)
-    RT=[]
+    #td1= time.time()
+    #f_ds=detector(g_img, 1)#1 represents upsample the image 1 times for detection
+    f_ds=detector(g_img, 0)
+    #td2 = time.time()
+    print('Time in detecting face: %fs'%(td2-td1))
     if len(f_ds) == 0:
         #pl.write('0')
         print(">>>***%%%Warning [getLandMarkFeatures_and_ImgPatches()]: No face was detected from the image")
         if not fromfacedataset:
             print(">>>***%%%Warning [getLandMarkFeatures_and_ImgPatches()]: No face was detected, and return False and None values")
-            return RT
+
+            return None, False, None, False, None, None, None, None
         else:
             print(">>>***%%%Warning [getLandMarkFeatures_and_ImgPatches()]: Processing the default config on the image")
             return __cropImg(g_img, LM=withLM, Patches=withPatches, regularize=fromfacedataset)
+    elif len(f_ds) > 1:
+        print(">>>***%%%Warning [getLandMarkFeatures_and_ImgPatches()]: Only process the first face detected.")
+    f_shape = predictor(g_img, f_ds[0])
+    #pl.write('1')
+    return __cropImg(g_img, shape=f_shape, LM=withLM, Patches=withPatches, regularize=fromfacedataset)
 
-    
-    for i in range(len(f_ds)):
-        f_shape = predictor(g_img, f_ds[i])
-        top=[]
-        top.append((f_ds[i].left(),f_ds[i].top()))
-        top.append((f_ds[i].right(),f_ds[i].bottom()))
-        rescaleimg, gf, geo_features, pf, eyepatch, foreheadpatch, mouthpatch, innerface=__cropImg(g_img, shape=f_shape, LM=withLM, Patches=withPatches, regularize=fromfacedataset)
-        RT.append((rescaleimg, gf, geo_features, pf, eyepatch, foreheadpatch, mouthpatch, innerface, top))
-    return RT
 ######
 #
 #The followings are for calibrate the image
@@ -693,7 +742,7 @@ def calibrateImge(imgpath):
 
 
 ### system module
-crop_size=0.7
+crop_size = 1#0.7
 def __getLandMarkFeatures_and_ImgPatches_for_Facelist(img_list, withLM=True, withPatches=True):
     """Input:
     img_list: face image list to be processed.
@@ -735,7 +784,7 @@ Outputs:
                 if curr_area > max_area:
                     max_area = curr_area
                     rescaleimg, gf, geo_features, pf, eyepatch, foreheadpatch, mouthpatch, innerface=__cropImg(g_img, shape=f_shape, LM=withLM, Patches=withPatches, regularize=False)
-            RT.append((rescaleimg, gf, geo_features, pf, eyepatch, foreheadpatch, mouthpatch, innerface))
+            RT.append((rescaleimg, geo_features, eyepatch, foreheadpatch, mouthpatch))
     return RT
 
 def __calibrateImageWithArrayInput(img):
@@ -838,20 +887,26 @@ def preprocessImage(img):
     
     # pack the features and return   
     features = {}
-    detected, face_list, originalPoints = __calibrateImageWithArrayInput(img)
+    detected, face_list, original_points = __calibrateImageWithArrayInput(img)
     features['detected'] = detected
-    if detected: # detect human face
-        processedFeature = __getLandMarkFeatures_and_ImgPatches_for_Facelist(face_list, False, False)
+    # detect human face after calibrating but may not be able to extract features from the face
+    if detected: 
+        processed_features = __getLandMarkFeatures_and_ImgPatches_for_Facelist(face_list, True, False)
         
-        rescaleimg, detectedOriginalPoints = [], []
-        for i in range(len(processedFeature)):
-            if processedFeature[i]:
+        rescaleimg, geometric_features, detected_original_points = [], [], []
+        for i in range(len(processed_features)):
+            if processed_features[i]:
                 # order of features
-                # rescaleimg, gf, geo_features, pf, eyepatch, foreheadpatch, mouthpatch, innerface, rotatedPoints 
-                rescaleimg.append(processedFeature[i][0].reshape(1, 128, 128, 1))
-                detectedOriginalPoints.append(originalPoints[i])
+                # rescaleimg, geo_features, eyepatch, foreheadpatch, mouthpatch 
+                rescaleimg.append(processed_features[i][0].reshape(128, 128, 1))
+                geometric_features.append(processed_features[i][1])
+                detected_original_points.append(original_points[i])
 
-        print('detect {0} human faces'.format(len(detectedOriginalPoints)))
+        print('detect {0} human faces'.format(len(detected_original_points)))
+        # may not be able to extract features  from an unempty face list
+        if len(detected_original_points) == 0:
+            features['detected'] = False
+            return features
         
         # save the cropped image
         # print('cropping img with face to shape {0}'.format(img.shape))
@@ -860,15 +915,19 @@ def preprocessImage(img):
         # if cropping image, move the square surrounding human face to the right place 
         if cropped:
             tmp = []
-            for face in detectedOriginalPoints:
+            for face in detected_original_points:
                 modified_left_top = (face[0][0] + left_top[1], face[0][1] + left_top[0])
                 modified_right_bottom = (face[1][0] + left_top[1], face[1][1] + left_top[0])
                 tmp.append((modified_left_top, modified_right_bottom))
-            detectedOriginalPoints = tmp
+            detected_original_points = tmp
         
-        assert len(rescaleimg) == len(detectedOriginalPoints), 'the number of human faces do not equal the number of face points'
-        features['rescaleimg'] = rescaleimg
-        features['originalPoints'] = detectedOriginalPoints
+        assert len(rescaleimg) == len(detected_original_points) == len(geometric_features),\
+            'the number of human faces do not equal the number of face points'
+
+        features['rescaleimg'] = np.array(rescaleimg)
+        features['originalPoints'] = detected_original_points
+        features['geometricFeatures'] = np.array(geometric_features)
+        print('length of face_list:{0} \nlength of detected face: {1}'.format(len(face_list), len(rescaleimg)))
     return features
     
 

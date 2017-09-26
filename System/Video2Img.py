@@ -2,7 +2,7 @@
 # @Author: lc
 # @Date:   2017-09-08 09:20:58
 # @Last Modified by:   lc
-# @Last Modified time: 2017-09-25 14:56:19
+# @Last Modified time: 2017-09-26 15:17:20
 
 
 #######################################################################
@@ -26,9 +26,8 @@ import numpy as np
 from kafka import KafkaConsumer, KafkaProducer
 
 from FaceProcessUtilMultiFaces import preprocessImage
-#from AlexNet import AlexNet
-from VGG import VGGModel
 from Recorder import FileRecorder, RedisRecorder
+from Models.ShallowModels import LogisticRegression
 
 SERVER = '127.0.0.1:9092'
 SERVER = '125.216.242.158:9092'
@@ -71,13 +70,14 @@ class ProbabilityProducer():
     def send_probability_distribution(self, msg):
         self.producer.send(PROBABILITY_TOPIC, value = msg)
 
+"""
 global_model = VGGModel()
 def predict(face_img):
     global global_model
     return global_model.predict(face_img) # (emotion, probability_distribution)
+"""
 
-
-def predict_and_label_frame(video_consumer , img_producer, probability_producer, recorder, pool, maximum_detect_face = 6):
+def predict_and_label_frame(video_consumer , img_producer, probability_producer, recorder, model, pool = None, maximum_detect_face = 6):
     """fetch original frame from kafka with video_consumer
        detect whether there are human faces in the frame
        predict the emotions of  human faces, label them on the image
@@ -90,7 +90,6 @@ def predict_and_label_frame(video_consumer , img_producer, probability_producer,
         for img in video_consumer.get_img():
             start_time = time.time()
             consume_count += 1
-            print('========Consume {0} from video stream'.format(consume_count))
             # write original image to disk
             """
             raw_dest_img = './rev_img/original{0}.png'.format(consume_count)
@@ -109,14 +108,19 @@ def predict_and_label_frame(video_consumer , img_producer, probability_producer,
                 produce_count += 1
                 # deal with multiple face in an image
                 num_faces = min(maximum_detect_face, len(result['rescaleimg']))
-                face_imgs, face_points = result['rescaleimg'], result['originalPoints']
+                face_imgs, geometric_features, face_points = result['rescaleimg'], result['geometricFeatures'], result['originalPoints']
                 emotion_distributions = {}
                 # use multiple processes to predict
                 # predicted_results = pool.map(predict, face_imgs)
-                predicted_results = [pool.apply(predict, args = (face_imgs[i], )) for i in range(num_faces)]
+                # predicted_results = [pool.apply(predict, args = (face_imgs[i], )) for i in range(num_faces)]
+                print(type(face_imgs), face_imgs.shape)
+                print(type(geometric_features), geometric_features.shape)
+
+                all_emotion, all_probability_distribution = model.predict(geometric_features)
                 for i in range(num_faces):
-                    emotion, probability_distribution = predicted_results[i]
-                    distribution = dict(zip(EMOTION, probability_distribution.tolist()[0]))
+                    emotion, probability_distribution = all_emotion[i], all_probability_distribution[i]
+                    #emotion, probability_distribution = model.predict(face_imgs[i])
+                    distribution = dict(zip(EMOTION, probability_distribution.tolist()))
                     emotion_distributions[COLOR_HEX[i]] = distribution
                     print('*****************probability_distribution: {0}'.format(probability_distribution))
                     
@@ -148,20 +152,22 @@ def predict_and_label_frame(video_consumer , img_producer, probability_producer,
                 print('#########produce raw image to image stream')
                 empty_distribution = {COLOR_HEX[0] : dict(zip(EMOTION, [0] * 7))}
                 probability_producer.send_probability_distribution(json.dumps(empty_distribution).encode('utf8'))
-
+            
 
 if __name__ == '__main__':
     video_consumer = VideoConsumer()
     img_producer = ImageProducer()
     probability_producer = ProbabilityProducer()
     recorder = RedisRecorder()
-    pool = Pool(2)
+    # pool = Pool(2)
     # record_dir = './detected_records/'
     # file_recorder = FileRecorder(record_dir)
     # model = AlexNet()
+    model = LogisticRegression()
+    print('model is loaded successfully, ready to start')
 
     predict_and_label_frame(video_consumer = video_consumer, 
                             img_producer = img_producer, 
                             probability_producer = probability_producer, 
                             recorder = recorder,
-                            pool = pool)
+                            model = model)
