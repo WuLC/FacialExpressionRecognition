@@ -2,7 +2,7 @@
 # @Author: WuLC
 # @Date:   2017-09-21 11:16:46
 # @Last Modified by:   WuLC
-# @Last Modified time: 2017-09-28 15:42:22
+# @Last Modified time: 2017-09-28 15:47:12
 
 ########################################################
 # save the detected face and emotion on disk or database
@@ -66,7 +66,7 @@ class RedisRecorder():
     def __init__(self,
                  HOST = '125.216.242.158',
                  PORT = 6379,
-                 PASSWORD = 'XXXXX',
+                 PASSWORD = 'ScutFER435$',
                  DB = 0):
         try:
             self.conn = redis.Redis(host = HOST, port = PORT, password = PASSWORD, db= DB)

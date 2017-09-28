@@ -2,12 +2,13 @@
 # @Author: lc
 # @Date:   2017-09-12 21:06:45
 # @Last Modified by:   lc
-# @Last Modified time: 2017-09-18 20:31:38
+# @Last Modified time: 2017-09-26 14:20:55
 
 
 from kafka import KafkaConsumer
 
 SERVER = '127.0.0.1:9092'
+SERVER = '125.216.242.158:9092'
 IMAGE_TOPIC = 'image'
 PROBABILITY_TOPIC = 'emotion_probability'
 

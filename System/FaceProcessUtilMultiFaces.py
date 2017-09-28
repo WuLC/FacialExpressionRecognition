@@ -831,6 +831,8 @@ def __calibrateImageWithArrayInput(img):
         nw = int(bbrx-btlx)
         nh = int(bbry-btly)
         imcrop = np.zeros((nh,nw), dtype = "uint8")
+        x = x - btlx
+        y = y - btly
         blxstart = 0
         if btlx < 0:
             blxstart = -btlx
