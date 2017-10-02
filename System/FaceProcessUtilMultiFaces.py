@@ -742,7 +742,7 @@ def calibrateImge(imgpath):
 
 
 ### system module
-crop_size = 1#0.7
+crop_size = 0.7 
 def __getLandMarkFeatures_and_ImgPatches_for_Facelist(img_list, withLM=True, withPatches=True):
     """Input:
     img_list: face image list to be processed.
