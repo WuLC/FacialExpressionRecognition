@@ -2,5 +2,6 @@ System/dlibmodel/
 System/models/model_weights/
 System/detected_records/
 System/test_imgs/
+System/test_src/
 *.pyc
 *.json
