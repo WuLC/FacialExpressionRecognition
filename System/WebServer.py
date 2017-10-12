@@ -4,9 +4,6 @@
 # @Last Modified by:   lc
 # @Last Modified time: 2017-09-18 20:31:00
 
-import time 
-
-import cv2
 from flask import Flask, render_template, Response
 
 from Consumer import ImageConsumer, ProbabilityConsumer
