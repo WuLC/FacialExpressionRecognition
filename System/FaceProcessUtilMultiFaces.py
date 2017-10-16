@@ -893,15 +893,19 @@ def preprocessImage(img):
     features['detected'] = detected
     # detect human face after calibrating but may not be able to extract features from the face
     if detected: 
-        processed_features = __getLandMarkFeatures_and_ImgPatches_for_Facelist(face_list, True, False)
+        processed_features = __getLandMarkFeatures_and_ImgPatches_for_Facelist(face_list, True, True)
         
         rescaleimg, geometric_features, detected_original_points = [], [], []
+        eye_patches, forehead_patches, mouth_patches = [], [] ,[]
         for i in range(len(processed_features)):
             if processed_features[i]:
                 # order of features
                 # rescaleimg, geo_features, eyepatch, foreheadpatch, mouthpatch 
                 rescaleimg.append(processed_features[i][0].reshape(128, 128, 1))
                 geometric_features.append(processed_features[i][1])
+                eye_patches.append(processed_features[i][2].reshape(26, 64, 1))
+                forehead_patches.append(processed_features[i][3].reshape(49, 28, 1))
+                mouth_patches.append(processed_features[i][4].reshape(30, 54, 1))
                 detected_original_points.append(original_points[i])
 
         print('detect {0} human faces'.format(len(detected_original_points)))
@@ -925,10 +929,15 @@ def preprocessImage(img):
         
         assert len(rescaleimg) == len(detected_original_points) == len(geometric_features),\
             'the number of human faces do not equal the number of face points'
+        assert len(eye_patches) == len(mouth_patches) == len(forehead_patches),\
+            'size of patches do not matche'
 
         features['rescaleimg'] = np.array(rescaleimg)
         features['originalPoints'] = detected_original_points
         features['geometricFeatures'] = np.array(geometric_features)
+        features['eye'] = np.array(eye_patches)
+        features['forehead'] = np.array(forehead_patches)
+        features['mouth'] = np.array(mouth_patches)
         print('length of face_list:{0} \nlength of detected face: {1}'.format(len(face_list), len(rescaleimg)))
     return features
     
