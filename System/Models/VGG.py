@@ -4,7 +4,7 @@ import cv2
 from FaceProcessUtil import preprocessImage as PPI
 
 MAPPING = {0:'neutral', 1:'angry', 2:'surprise', 3:'disgust', 4:'fear', 5:'happy', 6:'sad'}
-MP = './model_weights/'
+MP = './Models/model_weights/'
 m1shape=[None, 128,128,1]
 DEFAULT_PADDING = 'SAME'
 TypeThreshold=100
@@ -26,13 +26,19 @@ def getModelPathForPrediction(mid=0):
         mp=MP+'D17_M1_N4_T0_V0_R2_20170912180554.ckpt'#0.99507389
 
     elif mid==408:
-        mp=MP+'D17_M4_N4_T0_V0_R1_20170913115527.ckpt'#0.97126437
-        
+        mp=MP+'D17_M4_N4_T0_V0_R1_20170913115527.ckpt'#0.97126437   
     elif mid==409:
         mp=MP+'D17_M4_N4_T0_V0_R7_20170913151814.ckpt'#0.97126437
-
     elif mid == 410:
         mp = MP+'D17_M1_N4_T0_V0_R0_20170912165626.ckpt'
+    elif mid == 411:
+        mp = MP+'D502_M1_N4_T0_V0_R3_20171009234127_1.1654274464_.ckpt-2760'
+    elif mid == 412:
+        mp = MP+'D502_M1_N4_T0_V0_R5_20171010003053_1.1654222012_.ckpt-5977'
+    elif mid == 413:
+        mp = MP+'D502_M1_N4_T0_V0_R7_20171010011707_1.2429453135_.ckpt-8716'
+    elif mid == 414:
+        mp = MP+'D502_M1_N4_T1_V1_R0_20171010021312_1.1981185675_.ckpt-4260'
     else:
         print('Unexpected Model ID. TRY another one.')
         exit(-1)
@@ -371,7 +377,7 @@ class Network(object):
 
 
 class VGGModel:
-    def __init__(self, mid=902, Module=1):
+    def __init__(self, mid=411, Module=1):
         if Module==1:
             ###define the graph
             self.networkGraph=tf.Graph()
@@ -398,7 +404,6 @@ class VGGModel:
                 print('Network Model loaded\n')
             except:
                 print('ERROR: Unable to load the pretrained network.')
-                traceback.print_exc()
                 exit(2)
 
         else:
@@ -408,7 +413,7 @@ class VGGModel:
 
     def predict(self, img):#img must have the shape of [1, 128, 128, 1]
         probability = self.prob.eval(feed_dict={self.images:img})
-        emotion = MAPPING[np.argmax(probability)]
+        emotion = [MAPPING[np.argmax(pro)] for pro in probability]
         return emotion, probability
 
 
