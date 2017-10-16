@@ -26,8 +26,10 @@ import numpy as np
 from kafka import KafkaConsumer, KafkaProducer
 
 from FaceProcessUtilMultiFaces import preprocessImage
-from Recorder import FileRecorder, RedisRecorder
+from Recorder import RedisRecorder
+from Models.VGG import VGGModel
 from Models.ShallowModels import LogisticRegression
+from Models.FacePatchesModel import FacePatchesModel
 
 SERVER = '127.0.0.1:9092'
 SERVER = '125.216.242.158:9092'
@@ -109,6 +111,7 @@ def predict_and_label_frame(video_consumer , img_producer, probability_producer,
                 # deal with multiple face in an image
                 num_faces = min(maximum_detect_face, len(result['rescaleimg']))
                 face_imgs, geometric_features, face_points = result['rescaleimg'], result['geometricFeatures'], result['originalPoints']
+                eye_patches, forehead_patches, mouth_patches = result['eye'], result['forehead'], result['mouth']
                 emotion_distributions = {}
                 # use multiple processes to predict
                 # predicted_results = pool.map(predict, face_imgs)
@@ -116,7 +119,10 @@ def predict_and_label_frame(video_consumer , img_producer, probability_producer,
                 print(type(face_imgs), face_imgs.shape)
                 print(type(geometric_features), geometric_features.shape)
 
-                all_emotion, all_probability_distribution = model.predict(geometric_features)
+                patches = [eye_patches, forehead_patches, mouth_patches]
+                all_emotion, all_probability_distribution = model.predict(*patches)
+                # all_emotion, all_probability_distribution = model.predict(face_imgs)
+                
                 for i in range(num_faces):
                     emotion, probability_distribution = all_emotion[i], all_probability_distribution[i]
                     #emotion, probability_distribution = model.predict(face_imgs[i])
@@ -163,7 +169,9 @@ if __name__ == '__main__':
     # record_dir = './detected_records/'
     # file_recorder = FileRecorder(record_dir)
     # model = AlexNet()
-    model = LogisticRegression()
+    # model = LogisticRegression()
+    # model = VGGModel(mid = 414)
+    model = FacePatchesModel(mid = 302)
     print('model is loaded successfully, ready to start')
 
     predict_and_label_frame(video_consumer = video_consumer, 
