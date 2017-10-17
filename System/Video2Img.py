@@ -100,6 +100,7 @@ def predict_and_label_frame(video_consumer , img_producer, probability_producer,
             # deal with the whole original image
             # np_arr = np.fromstring(img, dtype = np.uint8) # one dimension array
             # np_img = cv2.imdecode(np_arr, cv2.IMREAD_COLOR)
+            # result = preprocessImage(np_img)
 
             # deal with the crop part by the camera
             data = json.loads(img.decode('utf-8'))
@@ -111,11 +112,8 @@ def predict_and_label_frame(video_consumer , img_producer, probability_producer,
             h,w,c = np_img.shape
             fx,fy,fw,fh = float(data['fx']),float(data['fy']),float(data['fwidth']),float(data['fheight'])
             x,y,wd,hd =int(w*fx),int(h*fy),int(w*fw),int(h*fh)
-            # face_np_img = np_img[y : y+hd, x : x+wd]
-            # print("croped image shape {1}".format(face_np_img.shape))
-            
             result = preprocessImage(np_img, crop_img = True, crop_part = ((x, y), (x+wd, y + hd)))
-            # result = preprocessImage(np_img)
+
             print('**********time consumed by face detection: {0}s'.format(time.time() - start_time))
             
             start_time = time.time()
@@ -160,6 +158,7 @@ def predict_and_label_frame(video_consumer , img_producer, probability_producer,
                 # send image to kafka
                 resized_np_img =  cv2.resize(np_img, (792, 432))
                 img_producer.send_img(cv2.imencode('.jpeg', resized_np_img)[1].tostring())
+                # img_producer.send_img(cv2.imencode('.jpeg', np_img)[1].tostring())
                 print('#########produce {0} to image stream'.format(produce_count))
                 # send emotion probability distribution to kafka
                 probability_producer.send_probability_distribution(json.dumps(emotion_distributions).encode('utf8'))
@@ -170,6 +169,7 @@ def predict_and_label_frame(video_consumer , img_producer, probability_producer,
                 # message = {'img': img, 'distribution': None}
                 resized_np_img =  cv2.resize(np_img, (792, 432))
                 img_producer.send_img(cv2.imencode('.jpeg', resized_np_img)[1].tostring())
+                # img_producer.send_img(cv2.imencode('.jpeg', np_img)[1].tostring())
                 print('#########produce raw image to image stream')
                 empty_distribution = {COLOR_HEX[0] : dict(zip(EMOTION, [0] * 7))}
                 probability_producer.send_probability_distribution(json.dumps(empty_distribution).encode('utf8'))
