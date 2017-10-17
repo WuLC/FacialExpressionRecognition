@@ -64,9 +64,9 @@ class FileRecorder():
 
 class RedisRecorder():
     def __init__(self,
-                 HOST = '125.216.242.158',
+                 HOST = 'XXXX',
                  PORT = 6379,
-                 PASSWORD = 'XXXXXX',
+                 PASSWORD = 'XXXX',
                  DB = 0):
         try:
             self.conn = redis.Redis(host = HOST, port = PORT, password = PASSWORD, db= DB)
