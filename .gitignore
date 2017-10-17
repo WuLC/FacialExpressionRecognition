@@ -2,6 +2,7 @@ System/dlibmodel/
 System/models/model_weights/
 System/detected_records/
 System/test_imgs/
+System/crop_imgs/
 System/test_src/
 .vscode/
 *.pyc
