@@ -18,6 +18,7 @@ os.environ['TF_CPP_MIN_LOG_LEVEL']='2'
 os.environ["CUDA_VISIBLE_DEVICES"] = '1' # decide to use CPU or GPU
 import time
 import json
+import base64
 from datetime import datetime
 from multiprocessing import Pool
 
@@ -92,17 +93,29 @@ def predict_and_label_frame(video_consumer , img_producer, probability_producer,
         for img in video_consumer.get_img():
             start_time = time.time()
             consume_count += 1
-            # write original image to disk
-            """
-            raw_dest_img = './rev_img/original{0}.png'.format(consume_count)
-            with open(raw_dest_img, 'wb') as f:
-                f.write(img)
-            """
-            # transform image from bytes to ndarray
-            np_arr = np.fromstring(img, dtype = np.uint8) # one dimension array
-            np_img = cv2.imdecode(np_arr, cv2.IMREAD_COLOR)
 
-            result = preprocessImage(np_img)
+            #######################################
+            # transform image from bytes to ndarray
+            #######################################
+            # deal with the whole original image
+            # np_arr = np.fromstring(img, dtype = np.uint8) # one dimension array
+            # np_img = cv2.imdecode(np_arr, cv2.IMREAD_COLOR)
+
+            # deal with the crop part by the camera
+            data = json.loads(img.decode('utf-8'))
+            base64_encoded_img = data['img'].encode('utf-8')
+            byte_img = base64.decodebytes(base64_encoded_img)
+            np_img = cv2.imdecode( np.asarray(bytearray(byte_img), dtype=np.uint8), 1 )
+            print('original image shape {0}'.format(np_img.shape))
+            # crop human face
+            h,w,c = np_img.shape
+            fx,fy,fw,fh = float(data['fx']),float(data['fy']),float(data['fwidth']),float(data['fheight'])
+            x,y,wd,hd =int(w*fx),int(h*fy),int(w*fw),int(h*fh)
+            # face_np_img = np_img[y : y+hd, x : x+wd]
+            # print("croped image shape {1}".format(face_np_img.shape))
+            
+            result = preprocessImage(np_img, crop_img = True, crop_part = ((x, y), (x+wd, y + hd)))
+            # result = preprocessImage(np_img)
             print('**********time consumed by face detection: {0}s'.format(time.time() - start_time))
             
             start_time = time.time()
@@ -141,11 +154,12 @@ def predict_and_label_frame(video_consumer , img_producer, probability_producer,
 
                 print('**********time consumed by predicting, storing and texting image: {0}s'.format(time.time() - start_time))
                     
-                # cv2.imwrite('./test_imgs/img_{0}.jpg'.format(datetime.now().strftime("%Y%m%d%H%M%S")), np_img)              
+                cv2.imwrite('./test_imgs/img_{0}.jpg'.format(datetime.now().strftime("%Y%m%d%H%M%S")), np_img)              
                 
                 start_time = time.time()
                 # send image to kafka
-                img_producer.send_img(cv2.imencode('.jpeg', np_img)[1].tostring())
+                resized_np_img =  cv2.resize(np_img, (792, 432))
+                img_producer.send_img(cv2.imencode('.jpeg', resized_np_img)[1].tostring())
                 print('#########produce {0} to image stream'.format(produce_count))
                 # send emotion probability distribution to kafka
                 probability_producer.send_probability_distribution(json.dumps(emotion_distributions).encode('utf8'))
@@ -154,7 +168,8 @@ def predict_and_label_frame(video_consumer , img_producer, probability_producer,
 
             else:
                 # message = {'img': img, 'distribution': None}
-                img_producer.send_img(img)
+                resized_np_img =  cv2.resize(np_img, (792, 432))
+                img_producer.send_img(cv2.imencode('.jpeg', resized_np_img)[1].tostring())
                 print('#########produce raw image to image stream')
                 empty_distribution = {COLOR_HEX[0] : dict(zip(EMOTION, [0] * 7))}
                 probability_producer.send_probability_distribution(json.dumps(empty_distribution).encode('utf8'))
@@ -171,7 +186,7 @@ if __name__ == '__main__':
     # model = AlexNet()
     # model = LogisticRegression()
     # model = VGGModel(mid = 414)
-    model = FacePatchesModel(mid = 302)
+    model = FacePatchesModel(mid = 301)
     print('model is loaded successfully, ready to start')
 
     predict_and_label_frame(video_consumer = video_consumer, 

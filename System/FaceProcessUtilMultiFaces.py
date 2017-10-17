@@ -857,12 +857,13 @@ def __calibrateImageWithArrayInput(img):
 
     return True, img_face_list, rectPoint
 
-def preprocessImage(img):
+def preprocessImage(img, crop_img = False, crop_part = None):
     """process image as input for model, extract all human faces in the image and their corresponding coordinate points
         
     Args:
         img (ndarray): input image represent in numpy.ndarray
-    
+        crop_img(boolean): whether to crop the image
+        crop_part(tuple): which part to crop, should contains two coordinate points, e.g ((1,2), (4,6))
     Returns: a dictionnary contains the following information
         detected(boolean): bool type to indicates whether the there are human faces in the input
         rescaleimg(list of ndarray): a list of rescaled and cropped image of the detected face
@@ -875,18 +876,14 @@ def preprocessImage(img):
         mouthpatch: mouthpatch of the rescaleimg
         innerface: croped face from the rescaleimg
     """
-    crop_part = ((500, 1450), (1500, 2000)) # 4000 * 3000
-    crop_part = ((120, 1050), (1400, 1700)) # 3072 * 2048
-    cropped = False
-    left_top, right_bottom = crop_part
-
-    r, c, ch = img.shape
-    if r >= right_bottom[0] and c >= right_bottom[1]:
-        cropped = True
+    if crop_img:
+        if crop_part == None:
+            print('Can not crop image cause no crop part was given')
+            exit(0)
         print('cropping image........')
-        img = img[left_top[0] : right_bottom[0], left_top[1] : right_bottom[1], 0]
-        # cv2.imwrite('./crop_imgs/crop_{0}.jpeg'.format(datetime.now().strftime("%Y%m%d%H%M%S")), img)
-    
+        left_top, right_bottom = crop_part
+        img = img[left_top[1] : right_bottom[1], left_top[0] : right_bottom[0]]
+        
     # pack the features and return   
     features = {}
     detected, face_list, original_points = __calibrateImageWithArrayInput(img)
@@ -915,15 +912,15 @@ def preprocessImage(img):
             return features
         
         # save the cropped image
-        # print('cropping img with face to shape {0}'.format(img.shape))
-        # cv2.imwrite('./crop_imgs/crop_{0}.jpeg'.format(datetime.now().strftime("%Y%m%d%H%M%S")), img)
+        print('cropping img with face to shape {0}'.format(img.shape))
+        cv2.imwrite('./crop_imgs/crop_{0}.jpeg'.format(datetime.now().strftime("%Y%m%d%H%M%S")), img)
 
         # if cropping image, move the square surrounding human face to the right place 
-        if cropped:
+        if crop_img:
             tmp = []
             for face in detected_original_points:
-                modified_left_top = (face[0][0] + left_top[1], face[0][1] + left_top[0])
-                modified_right_bottom = (face[1][0] + left_top[1], face[1][1] + left_top[0])
+                modified_left_top = (face[0][0] + left_top[0], face[0][1] + left_top[1])
+                modified_right_bottom = (face[1][0] + left_top[0], face[1][1] + left_top[1])
                 tmp.append((modified_left_top, modified_right_bottom))
             detected_original_points = tmp
         
