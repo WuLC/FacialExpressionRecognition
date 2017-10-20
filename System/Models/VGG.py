@@ -2,6 +2,7 @@ import numpy as np
 import tensorflow as tf
 import cv2
 from FaceProcessUtil import preprocessImage as PPI
+import traceback
 
 MAPPING = {0:'neutral', 1:'angry', 2:'surprise', 3:'disgust', 4:'fear', 5:'happy', 6:'sad'}
 MP = './Models/model_weights/'
@@ -12,19 +13,20 @@ TypeThreshold=100
 def getModelPathForPrediction(mid=0):
     if mid==900:
         mp=MP+'D16_M1_N9_T0_V0_R5_20170905144118.ckpt'#1.00000000
-
     elif mid==901:
         mp=MP+'D16_M1_N9_T2_V2_R2_20170916001330.ckpt'
-
     elif mid == 902:
         mp=MP+'D16_M1_N9_T2_V2_R3_20170916011504.ckpt'
-
+    elif mid == 903:
+        mp = MP+'D501_M1_N9_T0_V0_R6_20171011165044_1.1654224396_.ckpt-3988'
+    elif mid == 904:
+        mp = MP+'D532_M1_N9_T2_V2_R3_20171014121231_1.1756289005_.ckpt-44120'
+    elif mid == 905:
+        mp = MP+'D532_M1_N9_T6_V6_R8_20171017032855_1.1858307123_.ckpt-21481'
     elif mid==402:
         mp=MP+'D111_M1_N4_T7_V7_R9_20170828050751.ckpt'#0.95312382   
-
     elif mid==403:
         mp=MP+'D17_M1_N4_T0_V0_R2_20170912180554.ckpt'#0.99507389
-
     elif mid==408:
         mp=MP+'D17_M4_N4_T0_V0_R1_20170913115527.ckpt'#0.97126437   
     elif mid==409:
@@ -402,7 +404,9 @@ class VGGModel:
                 #the saver must define in the graph of its owner session, or it will occur error in restoration or saving
                 self.saver.restore(sess=self.sess, save_path=getModelPathForPrediction(mid))
                 print('Network Model loaded\n')
+                
             except:
+                traceback.print_exc()
                 print('ERROR: Unable to load the pretrained network.')
                 exit(2)
 
