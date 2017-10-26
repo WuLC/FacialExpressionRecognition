@@ -1,4 +1,5 @@
 System/dlibmodel/
+System/OpencvFaceDetector/
 System/models/model_weights/
 System/detected_records/
 System/test_imgs/
