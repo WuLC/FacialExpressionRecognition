@@ -896,8 +896,14 @@ def preprocessImage(img, crop_img = False, crop_part = None):
         eye_patches, forehead_patches, mouth_patches = [], [] ,[]
         for i in range(len(processed_features)):
             if processed_features[i]:
-                # order of features
-                # rescaleimg, geo_features, eyepatch, foreheadpatch, mouthpatch 
+                # order of features: rescaleimg, geo_features, eyepatch, foreheadpatch, mouthpatch 
+
+                # normalize feature
+                processed_features[i][0] = (processed_features[i][0]/255.0).astype('float32')
+                processed_features[i][2] = (processed_features[i][2]/255.0).astype('float32')
+                processed_features[i][3] = (processed_features[i][3]/255.0).astype('float32')
+                processed_features[i][4] = (processed_features[i][4]/255.0).astype('float32')
+            
                 rescaleimg.append(processed_features[i][0].reshape(128, 128, 1))
                 geometric_features.append(processed_features[i][1])
                 eye_patches.append(processed_features[i][2].reshape(26, 64, 1))
