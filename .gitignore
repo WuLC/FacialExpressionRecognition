@@ -1,3 +1,6 @@
+Algorithm/Datasets/
+Algorithm/logs/
+Algorithm/models/
 System/dlibmodel/
 System/OpencvFaceDetector/
 System/models/model_weights/
