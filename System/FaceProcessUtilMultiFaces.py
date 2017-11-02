@@ -7,7 +7,7 @@ import dlib
 import numpy as np
 from PIL import Image as IM
 from scipy import ndimage
-#import time
+from collections import defaultdict
 # --------------------------------------------------------------------------- #
 # Usage: python facepatches.py <inputDir> <outputDir>
 # --------------------------------------------------------------------------- #
@@ -868,13 +868,10 @@ def preprocessImage(img, crop_img = False, crop_part = None):
         detected(boolean): bool type to indicates whether the there are human faces in the input
         rescaleimg(list of ndarray): a list of rescaled and cropped image of the detected face
         originalPoints(list of tuple): a list tuple corresponding to rescaleimg, each tuple contains tow points that represent human faces
-        gf: bool type for geometry features flag, indicating whether there would be meaning values in geo_features or a just a None value
-        geo_features: geometryf features or None value
-        pf: bool type indicates whether the following features are meaningful or meaningless
-        eyepatch: eye patch of the recaleimg
-        foreheadpatch: forehead patch of the rescaleimg
-        mouthpatch: mouthpatch of the rescaleimg
-        innerface: croped face from the rescaleimg
+        geometricFeatures: geometryf features or None value
+        eye: eye patch of the recaleimg
+        forehead: forehead patch of the rescaleimg
+        mouth: mouthpatch of the rescaleimg
     """
     if crop_img:
         if crop_part == None:
@@ -885,13 +882,13 @@ def preprocessImage(img, crop_img = False, crop_part = None):
         img = img[left_top[1] : right_bottom[1], left_top[0] : right_bottom[0]]
         
     # pack the features and return   
-    features = {}
+    features = defaultdict(int)
     detected, face_list, original_points = __calibrateImageWithArrayInput(img)
-    features['detected'] = detected
+    
     # detect human face after calibrating but may not be able to extract features from the face
     if detected: 
+        features['detected'] = True
         processed_features = __getLandMarkFeatures_and_ImgPatches_for_Facelist(face_list, True, True)
-        
         rescaleimg, geometric_features, detected_original_points = [], [], []
         eye_patches, forehead_patches, mouth_patches = [], [] ,[]
         for i in range(len(processed_features)):
@@ -899,16 +896,16 @@ def preprocessImage(img, crop_img = False, crop_part = None):
                 # order of features: rescaleimg, geo_features, eyepatch, foreheadpatch, mouthpatch 
 
                 # normalize feature
-                processed_features[i][0] = (processed_features[i][0]/255.0).astype('float32')
-                processed_features[i][2] = (processed_features[i][2]/255.0).astype('float32')
-                processed_features[i][3] = (processed_features[i][3]/255.0).astype('float32')
-                processed_features[i][4] = (processed_features[i][4]/255.0).astype('float32')
+                normalized_img = (processed_features[i][0]/255.0).astype('float32')
+                normalized_eyepatch = (processed_features[i][2]/255.0).astype('float32')
+                normalized_foreheadpatch = (processed_features[i][3]/255.0).astype('float32')
+                normalized_mouthpatch = (processed_features[i][4]/255.0).astype('float32')
             
-                rescaleimg.append(processed_features[i][0].reshape(128, 128, 1))
+                rescaleimg.append(normalized_img.reshape(128, 128, 1))
                 geometric_features.append(processed_features[i][1])
-                eye_patches.append(processed_features[i][2].reshape(26, 64, 1))
-                forehead_patches.append(processed_features[i][3].reshape(49, 28, 1))
-                mouth_patches.append(processed_features[i][4].reshape(30, 54, 1))
+                eye_patches.append(normalized_eyepatch.reshape(26, 64, 1))
+                forehead_patches.append(normalized_foreheadpatch.reshape(49, 28, 1))
+                mouth_patches.append(normalized_mouthpatch.reshape(30, 54, 1))
                 detected_original_points.append(original_points[i])
 
         print('detect {0} human faces'.format(len(detected_original_points)))
@@ -918,8 +915,7 @@ def preprocessImage(img, crop_img = False, crop_part = None):
             return features
         
         # save the cropped image
-        print('cropping img with face to shape {0}'.format(img.shape))
-        cv2.imwrite('./crop_imgs/crop_{0}.jpeg'.format(datetime.now().strftime("%Y%m%d%H%M%S")), img)
+        # cv2.imwrite('./crop_imgs/crop_{0}.jpeg'.format(datetime.now().strftime("%Y%m%d%H%M%S")), img)
 
         # if cropping image, move the square surrounding human face to the right place 
         if crop_img:
@@ -942,6 +938,24 @@ def preprocessImage(img, crop_img = False, crop_part = None):
         features['forehead'] = np.array(forehead_patches)
         features['mouth'] = np.array(mouth_patches)
         print('length of face_list:{0} \nlength of detected face: {1}'.format(len(face_list), len(rescaleimg)))
+    elif crop_img:
+        # camera detect face while dlib detect no faces,crop the image directly
+        features['detected'] = True
+        face_size = 80
+        width, height, channels = img.shape
+        face_left_top = (int((width-face_size)/2), int((height-face_size)/2))
+        face_right_bottom = (face_left_top[0]+face_size, face_left_top[1]+face_size)
+        face_img = img[face_left_top[1] : face_right_bottom[1], face_left_top[0] : face_right_bottom[0]]
+        gray_face_img = cv2.cvtColor(face_img, cv2.COLOR_BGR2GRAY)
+        features['rescaleimg'] = cv2.resize(gray_face_img, (128, 128)).reshape((1,128,128,1))
+        # face point of human face in the original image
+        modified_left_top = (face_left_top[0] + left_top[0], face_left_top[1] + left_top[1])
+        modified_right_bottom = (face_right_bottom[0] + left_top[0], face_right_bottom[1] + left_top[1])
+        detected_original_points = [(modified_left_top, modified_right_bottom)]
+        features['originalPoints'] = detected_original_points
+        print('==================crop face for detection')
+    else:
+        features['detected'] = False
     return features
     
 

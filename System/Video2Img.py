@@ -80,7 +80,7 @@ def predict(face_img):
     return global_model.predict(face_img) # (emotion, probability_distribution)
 """
 
-def predict_and_label_frame(video_consumer , img_producer, probability_producer, recorder, model, pool = None, maximum_detect_face = 6):
+def predict_and_label_frame(video_consumer , img_producer, probability_producer, recorder, model, process_camera_frame = False, maximum_detect_face = 6):
     """fetch original frame from kafka with video_consumer
        detect whether there are human faces in the frame
        predict the emotions of  human faces, label them on the image
@@ -97,22 +97,23 @@ def predict_and_label_frame(video_consumer , img_producer, probability_producer,
             #######################################
             # transform image from bytes to ndarray
             #######################################
-            # deal with the whole original image
-            # np_arr = np.fromstring(img, dtype = np.uint8) # one dimension array
-            # np_img = cv2.imdecode(np_arr, cv2.IMREAD_COLOR)
-            # result = preprocessImage(np_img)
-
-            # deal with the crop part by the camera
-            data = json.loads(img.decode('utf-8'))
-            base64_encoded_img = data['img'].encode('utf-8')
-            byte_img = base64.decodebytes(base64_encoded_img)
-            np_img = cv2.imdecode( np.asarray(bytearray(byte_img), dtype=np.uint8), 1 )
-            print('original image shape {0}'.format(np_img.shape))
-            # crop human face
-            h,w,c = np_img.shape
-            fx,fy,fw,fh = float(data['fx']),float(data['fy']),float(data['fwidth']),float(data['fheight'])
-            x,y,wd,hd =int(w*fx),int(h*fy),int(w*fw),int(h*fh)
-            result = preprocessImage(np_img, crop_img = True, crop_part = ((x, y), (x+wd, y + hd)))
+            if process_camera_frame: 
+                # deal with the crop part by the camera
+                data = json.loads(img.decode('utf-8'))
+                base64_encoded_img = data['img'].encode('utf-8')
+                byte_img = base64.decodebytes(base64_encoded_img)
+                np_img = cv2.imdecode(np.asarray(bytearray(byte_img), dtype=np.uint8), 1 )
+                print('original image shape {0}'.format(np_img.shape))
+                # crop human face
+                h,w,c = np_img.shape
+                fx,fy,fw,fh = float(data['fx']),float(data['fy']),float(data['fwidth']),float(data['fheight'])
+                x,y,wd,hd =int(w*fx),int(h*fy),int(w*fw),int(h*fh)
+                result = preprocessImage(np_img, crop_img = True, crop_part = ((x, y), (x+wd, y + hd)))
+            else:
+                # deal with the whole original image
+                np_arr = np.fromstring(img, dtype = np.uint8) # one dimension array
+                np_img = cv2.imdecode(np_arr, cv2.IMREAD_COLOR)  
+                result = preprocessImage(np_img)
 
             print('**********time consumed by face detection: {0}s'.format(time.time() - start_time))
             
@@ -124,15 +125,13 @@ def predict_and_label_frame(video_consumer , img_producer, probability_producer,
                 face_imgs, geometric_features, face_points = result['rescaleimg'], result['geometricFeatures'], result['originalPoints']
                 eye_patches, forehead_patches, mouth_patches = result['eye'], result['forehead'], result['mouth']
                 emotion_distributions = {}
-                # use multiple processes to predict
-                # predicted_results = pool.map(predict, face_imgs)
-                # predicted_results = [pool.apply(predict, args = (face_imgs[i], )) for i in range(num_faces)]
-                print(type(face_imgs), face_imgs.shape)
-                print(type(geometric_features), geometric_features.shape)
+                # print(type(face_imgs), face_imgs.shape)
+                # print(type(geometric_features), geometric_features.shape)
 
                 patches = [eye_patches, forehead_patches, mouth_patches]
-                all_emotion, all_probability_distribution = model.predict(*patches)
-                # all_emotion, all_probability_distribution = model.predict(face_imgs)
+                # all_emotion, all_probability_distribution = model.predict(*patches)
+                all_emotion, all_probability_distribution = model.predict(face_imgs)
+                # all_emotion, all_probability_distribution = model.predict(geometric_features)
                 
                 for i in range(num_faces):
                     emotion, probability_distribution = all_emotion[i], all_probability_distribution[i]
@@ -152,24 +151,23 @@ def predict_and_label_frame(video_consumer , img_producer, probability_producer,
 
                 print('**********time consumed by predicting, storing and texting image: {0}s'.format(time.time() - start_time))
                     
-                cv2.imwrite('./test_imgs/img_{0}.jpg'.format(datetime.now().strftime("%Y%m%d%H%M%S")), np_img)              
+                # cv2.imwrite('./test_imgs/img_{0}.jpg'.format(datetime.now().strftime("%Y%m%d%H%M%S")), np_img)              
                 
                 start_time = time.time()
                 # send image to kafka
-                resized_np_img =  cv2.resize(np_img, (792, 432))
-                img_producer.send_img(cv2.imencode('.jpeg', resized_np_img)[1].tostring())
-                # img_producer.send_img(cv2.imencode('.jpeg', np_img)[1].tostring())
+                # resized_np_img =  cv2.resize(np_img, (792, 432))
+                # img_producer.send_img(cv2.imencode('.jpeg', resized_np_img)[1].tostring())
+                img_producer.send_img(cv2.imencode('.jpeg', np_img)[1].tostring())
                 print('#########produce {0} to image stream'.format(produce_count))
                 # send emotion probability distribution to kafka
                 probability_producer.send_probability_distribution(json.dumps(emotion_distributions).encode('utf8'))
                 print('#########produce {0} to probability stream'.format(emotion_distributions))
                 print('**********time consumed by sending image and distribution: {0}s'.format(time.time() - start_time))
-
             else:
-                # message = {'img': img, 'distribution': None}
-                resized_np_img =  cv2.resize(np_img, (792, 432))
-                img_producer.send_img(cv2.imencode('.jpeg', resized_np_img)[1].tostring())
-                # img_producer.send_img(cv2.imencode('.jpeg', np_img)[1].tostring())
+                # resized_np_img =  cv2.resize(np_img, (792, 432))
+                # img_producer.send_img(cv2.imencode('.jpeg', resized_np_img)[1].tostring())
+                print('######empty image shape {0}'.format(np_img.shape))
+                img_producer.send_img(cv2.imencode('.jpeg', np_img)[1].tostring())
                 print('#########produce raw image to image stream')
                 empty_distribution = {COLOR_HEX[0] : dict(zip(EMOTION, [0] * 7))}
                 probability_producer.send_probability_distribution(json.dumps(empty_distribution).encode('utf8'))
@@ -180,17 +178,19 @@ if __name__ == '__main__':
     img_producer = ImageProducer()
     probability_producer = ProbabilityProducer()
     recorder = RedisRecorder()
+    process_camera_frame = True
     # pool = Pool(2)
     # record_dir = './detected_records/'
     # file_recorder = FileRecorder(record_dir)
     # model = AlexNet()
     # model = LogisticRegression()
-    # model = VGGModel(mid = 414)
-    model = FacePatchesModel(mid = 301)
+    model = VGGModel(mid = 403)
+    # model = FacePatchesModel(mid = 301)
     print('model is loaded successfully, ready to start')
 
     predict_and_label_frame(video_consumer = video_consumer, 
                             img_producer = img_producer, 
                             probability_producer = probability_producer, 
                             recorder = recorder,
-                            model = model)
+                            model = model,
+                            process_camera_frame = process_camera_frame)
