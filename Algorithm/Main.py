@@ -7,8 +7,8 @@ from DeeplearningMethods.AlexNet import AlexNet
 
 
 if __name__ == '__main__':
-    TRAIN_DATA_FILE = './Datasets/D_KDEF_10G_only_rescale_images_with_RBG.pkl'
-    TEST_DATA_FILE = './Datasets/D_KDEF_10G_only_rescale_images_with_RBG.pkl'
+    TRAIN_DATA_FILE = './Datasets/D33_KDEF_10G_rescaleimg_geometryfeature_patches_web.pkl'
+    TEST_DATA_FILE = './Datasets/D33_KDEF_10G_rescaleimg_geometryfeature_patches_web.pkl'
     FEATURE_FILE_DIR = './Datasets/dl_feature/'
     MODEL_DIR = './models/'
     LOG_DIR = './logs/'

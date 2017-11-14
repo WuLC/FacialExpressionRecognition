@@ -28,10 +28,10 @@ from keras.optimizers import SGD
 
 from PreProcessing import pickle_2_numpy
 
-HEIGHT, WIDTH, CHANNELS = 128, 128, 3
+HEIGHT, WIDTH, CHANNELS = 128, 128, 1
 CATEGORIES = 7
 BATCH_SIZE = 32
-EPOCHS = 50
+EPOCHS = 300
 FEATURE_DIM = 1000
 
 class AlexNet:
@@ -41,6 +41,7 @@ class AlexNet:
         logging.basicConfig(level=logging.DEBUG, filename=logfile, filemode="a+", format="%(asctime)-15s %(levelname)-8s  %(message)s")
         self.feature_file_base_path = '{0}{1}_AlexNet_dim_{2}'.format(feature_file_dir, prefix_name, FEATURE_DIM)
         self.model_base_path = '{0}{1}_{2}epoches_'.format(model_dir, prefix_name, EPOCHS)
+        self.model_architecture = '{0}architecture.json'.format(model_dir)
 
         # load and reshape data firstly
         x, y  = pickle_2_numpy(train_data_file , original_image = True)
@@ -97,6 +98,7 @@ class AlexNet:
             print('=============={0} fold=============='.format(i+1))
             X_test = self.test_X[i]
             Y_test = self.test_Y[i]
+
             # check whether the model already exists
             model_path = self.model_base_path + '{0}.h5'.format(i)
             if os.path.exists(model_path):
@@ -114,6 +116,10 @@ class AlexNet:
                 #print(X_train.shape, Y_train.shape, X_test.shape, Y_test.shape)
 
                 self.model.fit(X_train, Y_train, batch_size = BATCH_SIZE, epochs = EPOCHS, verbose = 2, validation_data = (X_test, Y_test))
+                # save model architecture and weights
+                if not os.path.exists(self.model_architecture):
+                    with open(self.model_architecture, encoding='utf8', mode = 'w') as wf:
+                        wf.write(self.model.to_json())
                 self.model.save_weights(model_path)
             
             # validation set can be very large, need batch size
