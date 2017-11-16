@@ -8,6 +8,7 @@ System/detected_records/
 System/test_imgs/
 System/crop_imgs*/
 System/test_src/
+System/Euler/
 .vscode/
 *.pyc
 *.json
