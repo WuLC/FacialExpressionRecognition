@@ -9,6 +9,8 @@ System/test_imgs/
 System/crop_imgs*/
 System/test_src/
 System/Euler/
+System/DataCollection/images/
+System/FaceRecognition/known/
 .vscode/
 *.pyc
 *.json
