@@ -55,10 +55,11 @@ while True:
     if process_this_frame:
         # Find all the faces and face encodings in the current frame of video
         face_locations = face_recognition.face_locations(small_frame)
-        face_encodings = face_recognition.face_encodings(small_frame, face_locations)
+        face_encodings = face_recognition.face_encodings(small_frame, face_locations, num_jitters=1)
 
         face_names = []
         for face_encoding in face_encodings:
+            """
             # See if the face is a match for the known face(s)
             match = face_recognition.compare_faces(KNOWN_FACE_ENCODING, face_encoding, tolerance=0.4)
             name = "Unknown"
@@ -67,7 +68,16 @@ while True:
                 if match[i]:
                     name = KNOWN_PEOPLE[i]
                     break
-                
+            """
+            # recognize with euclidean distance directly
+            distances = face_recognition.face_distance(KNOWN_FACE_ENCODING, face_encoding)
+            print(distances)
+            name = "Uknown"
+            tolerance = 0.4
+            min_dist = min(distances)
+            if min_dist <= tolerance:
+                name = KNOWN_PEOPLE[distances.index(min_dist)]
+
             face_names.append(name)
 
     process_this_frame = not process_this_frame
