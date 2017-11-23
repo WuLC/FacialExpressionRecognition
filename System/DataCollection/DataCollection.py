@@ -156,7 +156,8 @@ def start_record():
 
 
 def restart_record():
-    global IDX, VIDEO_WRITER, PERSONAL_VIDEO_DIR
+    global IDX, VIDEO_WRITER, PERSONAL_VIDEO_DIR, RECORD_START_TIME
+    RECORD_START_TIME = None
     if VIDEO_WRITER:
         VIDEO_WRITER.release()
         video_path = '{0}{1}.avi'.format(PERSONAL_VIDEO_DIR, EMOTIONS[IDX])
