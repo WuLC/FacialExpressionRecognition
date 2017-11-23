@@ -112,7 +112,7 @@ def predict_and_label_frame(video_consumer , img_producer, probability_producer,
             else:
                 # deal with the whole original image
                 np_arr = np.fromstring(img, dtype = np.uint8) # one dimension array
-                np_img = cv2.imdecode(np_arr, cv2.IMREAD_COLOR)  
+                np_img = cv2.imdecode(np_arr, cv2.IMREAD_COLOR)
                 result = preprocessImage(np_img)
 
             print('**********time consumed by face detection: {0}s'.format(time.time() - start_time))
