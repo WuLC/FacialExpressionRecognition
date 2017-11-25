@@ -60,8 +60,8 @@ introduction_message = \
 
 
                                                 移动软件开发环境团队实验室
-                                                2017.11.24
-"""
+                                                {0}
+""".format(datetime.now().strftime("%Y/%m/%d"))
 
 # introduction INTRO_TEXT
 INTRO_TEXT = Text(WINDOW)
