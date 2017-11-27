@@ -32,7 +32,7 @@ IDX = -1
 # FRAME_SIZE = (640, 480)
 FRAME_SIZE = (1280, 720)
 RECORD_START_TIME = None
-
+CONTROL_WITH_BUTTON = False
 
 #Set up GUI
 WINDOW = tk.Tk()  #Makes main WINDOW
@@ -85,7 +85,7 @@ TEXT_HINT.insert(INSERT, '未录制')
 TEXT_HINT.grid(row=0, column=1)
 
 
-def start_collect():
+def start_collect(event=None):
     global VIDEO_DIR, PERSONAL_VIDEO_DIR, INTRO_TEXT
     print('start to collect')
     INTRO_TEXT.delete('1.0', END)
@@ -96,11 +96,11 @@ def start_collect():
     PERSONAL_VIDEO_DIR = VIDEO_DIR + '{0}/'.format(id)
     assert not os.path.exists(PERSONAL_VIDEO_DIR), 'ERROR, personal dir already exists'
     os.makedirs(PERSONAL_VIDEO_DIR)
-    next_emotion()
+    next_emotion(event)
     show_frame_stream()
 
 
-def restart_collect():
+def restart_collect(event=None):
     global VIDEO_WRITER
     if VIDEO_WRITER:
         VIDEO_WRITER.release()
@@ -111,7 +111,7 @@ def restart_collect():
     exit(0)
 
 
-def next_emotion():
+def next_emotion(event=None):
     global IDX, VIDEO_WRITER, REF_IMAGE, REF_IMAGE_DIR, EMOTIONS, TEXT_HINT, RECORD_START_TIME
     
     RECORD_START_TIME = None
@@ -144,7 +144,7 @@ def next_emotion():
     REF_IMAGE.configure(image=ref_imgtk)
 
 
-def start_record():
+def start_record(event=None):
     global VIDEO_WRITER, EMOTIONS, IDX, PERSONAL_VIDEO_DIR, RECORD_START_TIME
     if TEXT_HINT:
         TEXT_HINT.delete('1.0', END)
@@ -155,7 +155,7 @@ def start_record():
     VIDEO_WRITER = cv2.VideoWriter(video_path, FOURCC, 20.0, FRAME_SIZE)
 
 
-def restart_record():
+def restart_record(event=None):
     global IDX, VIDEO_WRITER, PERSONAL_VIDEO_DIR, RECORD_START_TIME
     RECORD_START_TIME = None
     if VIDEO_WRITER:
@@ -197,19 +197,35 @@ def show_frame_stream():
     WINDOW.after(1, show_frame_stream)
 
 
-start = Button(WINDOW, text="Start Collecting", width=15, command=start_collect)
-start.grid(row = 4, column=0, sticky=tk.NE)
 
-nextButton = Button(WINDOW, text="Next Emotion", width=15,command=next_emotion)
-nextButton.grid(row = 5, column=0, sticky=tk.NE)
+if CONTROL_WITH_BUTTON:
+    # control with button
+    start_button = Button(WINDOW, text="Start Collecting", width=15, command=start_collect)
+    start_button.grid(row = 4, column=0, sticky=tk.NE)
 
-nextButton = Button(WINDOW, text="Start Recording", width=15,command=start_record)
-nextButton.grid(row = 6, column=0, sticky=tk.NE)
+    next_button = Button(WINDOW, text="Next Emotion", width=15,command=next_emotion)
+    next_button.grid(row = 5, column=0, sticky=tk.NE)
 
-restartRecordingButton = Button(WINDOW, text="Restart Recording", width=15, command=restart_record)
-restartRecordingButton.grid(row = 7, column=0, sticky=tk.NE)
+    record_button = Button(WINDOW, text="Start Recording", width=15,command=start_record)
+    record_button.grid(row = 6, column=0, sticky=tk.NE)
 
-# restartCollectingButton = Button(WINDOW, text="Restart Collecting", width=15, command=restart_collect)
-# restartCollectingButton.grid(row = 8, column=0)
+    restart_record_button = Button(WINDOW, text="Restart Recording", width=15, command=restart_record)
+    restart_record_button.grid(row = 7, column=0, sticky=tk.NE)
+
+    # restartCollectingButton = Button(WINDOW, text="Restart Collecting", width=15, command=restart_collect)
+    # restartCollectingButton.grid(row = 8, column=0)
+else:
+    # control with keyboard
+    start_collect_key = '<i>'
+    restart_record_key = '<o>'
+    start_record_key = '<k>'
+    next_emotion_key = '<l>'
+    widget = Button(None, text='KeyBoard Listening')
+    widget.grid(row = 4, column=0, sticky=tk.NE)
+    widget.bind(start_collect_key, start_collect)
+    widget.bind(next_emotion_key, next_emotion)
+    widget.bind(start_record_key, start_record)
+    widget.bind(restart_record_key, restart_record)
+    widget.focus_set()
 
 WINDOW.mainloop()  #Starts GUI
