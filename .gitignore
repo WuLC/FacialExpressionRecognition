@@ -11,6 +11,7 @@ System/test_src/
 System/Euler/
 System/DataCollection/images/
 System/FaceRecognition/known/
+System/FaceRecognition/dlib_models/
 .vscode/
 *.pyc
 *.json
