@@ -15,4 +15,3 @@ System/FaceRecognition/dlib_models/
 .vscode/
 *.pyc
 *.json
-.gitignore
