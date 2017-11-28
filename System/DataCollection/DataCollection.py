@@ -32,7 +32,13 @@ IDX = -1
 # FRAME_SIZE = (640, 480)
 FRAME_SIZE = (1280, 720)
 RECORD_START_TIME = None
+
 CONTROL_WITH_BUTTON = False
+START_COLLECT_KEY = '<u>'
+RESTART_RECORD_KEY = '<i>'
+START_RECORD_KEY = '<j>'
+NEXT_EMOTION_KEY = '<k>'
+
 
 #Set up GUI
 WINDOW = tk.Tk()  #Makes main WINDOW
@@ -81,6 +87,9 @@ REF_IMAGE.grid(row=0, column=0, sticky=tk.NE)
 
 TEXT_HINT = Text(WINDOW)
 TEXT_HINT.configure(font=("microsoft yahei", 13, "bold"), fg='blue')
+if not CONTROL_WITH_BUTTON:
+    TEXT_HINT.insert(INSERT, '各按键功能如下\n{0}:Start Collecting\n{1}:Restart Recording\n{2}:Start Recording\n{3}:Next Emotion\n'.\
+                format(START_COLLECT_KEY, RESTART_RECORD_KEY, START_RECORD_KEY, NEXT_EMOTION_KEY))
 TEXT_HINT.insert(INSERT, '未录制')
 TEXT_HINT.grid(row=0, column=1)
 
@@ -133,9 +142,11 @@ def next_emotion(event=None):
 
     if TEXT_HINT:
         TEXT_HINT.delete('1.0', END)
+        if not CONTROL_WITH_BUTTON:
+            TEXT_HINT.insert(INSERT, '各按键功能如下\n{0}:Start Collecting\n{1}:Restart Recording\n{2}:Start Recording\n{3}:Next Emotion\n'.\
+                      format(START_COLLECT_KEY, RESTART_RECORD_KEY, START_RECORD_KEY, NEXT_EMOTION_KEY))
         TEXT_HINT.insert(INSERT, '待采集第{0}种表情:{1}\n'.format(IDX+1, EMOTIONS[IDX]))
         TEXT_HINT.insert(INSERT, '未录制')
-
     ref_frame = REF_IMAGE_DIR + '{}.jpg'.format(EMOTIONS[IDX])
     ref_cv2image = cv2.cvtColor(cv2.imread(ref_frame), cv2.COLOR_BGR2RGBA)
     ref_img = Image.fromarray(ref_cv2image)
@@ -148,6 +159,9 @@ def start_record(event=None):
     global VIDEO_WRITER, EMOTIONS, IDX, PERSONAL_VIDEO_DIR, RECORD_START_TIME
     if TEXT_HINT:
         TEXT_HINT.delete('1.0', END)
+        if not CONTROL_WITH_BUTTON:
+            TEXT_HINT.insert(INSERT, '各按键功能如下\n{0}:Start Collecting\n{1}:Restart Recording\n{2}:Start Recording\n{3}:Next Emotion\n'.\
+                      format(START_COLLECT_KEY, RESTART_RECORD_KEY, START_RECORD_KEY, NEXT_EMOTION_KEY))
         TEXT_HINT.insert(INSERT, '正在采集第{0}种表情:{1}\n'.format(IDX+1, EMOTIONS[IDX]))
         TEXT_HINT.insert(INSERT, '录制中..........')
     RECORD_START_TIME = int(datetime.now().strftime("%M%S"))
@@ -163,6 +177,9 @@ def restart_record(event=None):
         video_path = '{0}{1}.avi'.format(PERSONAL_VIDEO_DIR, EMOTIONS[IDX])
         os.remove(video_path)
     TEXT_HINT.delete('1.0', END)
+    if not CONTROL_WITH_BUTTON:
+        TEXT_HINT.insert(INSERT, '各按键功能如下\n{0}:Start Collecting\n{1}:Restart Recording\n{2}:Start Recording\n{3}:Next Emotion\n'.\
+                    format(START_COLLECT_KEY, RESTART_RECORD_KEY, START_RECORD_KEY, NEXT_EMOTION_KEY))
     TEXT_HINT.insert(INSERT, '已取消录制，请点击 Start Recording 重新录制当前表情{0}'.format(EMOTIONS[IDX]))
 
 
@@ -216,16 +233,12 @@ if CONTROL_WITH_BUTTON:
     # restartCollectingButton.grid(row = 8, column=0)
 else:
     # control with keyboard
-    start_collect_key = '<i>'
-    restart_record_key = '<o>'
-    start_record_key = '<k>'
-    next_emotion_key = '<l>'
     widget = Button(None, text='KeyBoard Listening')
     widget.grid(row = 4, column=0, sticky=tk.NE)
-    widget.bind(start_collect_key, start_collect)
-    widget.bind(next_emotion_key, next_emotion)
-    widget.bind(start_record_key, start_record)
-    widget.bind(restart_record_key, restart_record)
+    widget.bind(START_COLLECT_KEY, start_collect)
+    widget.bind(NEXT_EMOTION_KEY, next_emotion)
+    widget.bind(START_RECORD_KEY, start_record)
+    widget.bind(RESTART_RECORD_KEY, restart_record)
     widget.focus_set()
 
 WINDOW.mainloop()  #Starts GUI
