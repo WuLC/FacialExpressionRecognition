@@ -1,6 +1,7 @@
 import os
 import time
 import cv2
+import numpy as np
 import face_recognition
 
 # This is a demo of running face recognition on live video from your webcam. It's a little more complicated than the
@@ -47,7 +48,7 @@ while True:
     ret, frame = video_capture.read()
 
     # Resize frame of video to 1/4 size for faster face recognition processing
-    scale_factor = 1
+    scale_factor = 0.25
     scale_back_fator = int(1/scale_factor)
     small_frame = cv2.resize(frame, (0, 0), fx=scale_factor, fy=scale_factor)
 
@@ -74,9 +75,9 @@ while True:
             print(distances)
             name = "Uknown"
             tolerance = 0.4
-            min_dist = min(distances)
-            if min_dist <= tolerance:
-                name = KNOWN_PEOPLE[distances.index(min_dist)]
+            min_idx = np.argmin(distances)
+            if distances[min_idx] <= tolerance:
+                name = KNOWN_PEOPLE[min_idx]
 
             face_names.append(name)
 
@@ -92,15 +93,15 @@ while True:
         bottom *= scale_back_fator
         left *= scale_back_fator
         # Draw a box upon the face
-        cv2.rectangle(frame, (left, top), (right, bottom), (0, 0, 255), 2)
+        cv2.rectangle(frame, (left, top), (right, bottom), (255, 0, 0), 2)
 
         # Draw a label with a name below the face
         # cv2.rectangle(frame, (left, bottom - 35), (right, bottom), (0, 0, 255), cv2.FILLED)
         # font = cv2.FONT_HERSHEY_DUPLEX
         # cv2.putText(frame, name, (left + 6, bottom - 6), font, 1.0, (255, 255, 255), 1)
-        cv2.rectangle(frame, (left, top + 35), (right, top), (0, 0, 255), cv2.FILLED)
+        cv2.rectangle(frame, (left, top + 30), (right, top), (255, 0, 0), cv2.FILLED)
         font = cv2.FONT_HERSHEY_DUPLEX
-        cv2.putText(frame, name, (left + 6, top + 6), font, 1.0, (255, 255, 255), 1)
+        cv2.putText(frame, name, (left + 6, top + 20), font, 1.0, (255, 255, 255), 1)
 
     # Display the resulting image
     cv2.imshow('Video', frame)
