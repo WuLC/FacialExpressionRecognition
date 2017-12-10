@@ -45,9 +45,9 @@ FONT = cv2.FONT_HERSHEY_SIMPLEX
 class VideoConsumer():
     def __init__(self):
         self.consumer = KafkaConsumer(bootstrap_servers = [SERVER], auto_offset_reset='latest') # earliest
+        self.consumer.subscribe([VIDEO_TOPIC])
 
     def get_img(self):
-        self.consumer.subscribe([VIDEO_TOPIC])
         for message in self.consumer:
             if message.value != None:
                 yield message.value
@@ -93,7 +93,6 @@ def predict_and_label_frame(video_consumer , img_producer, probability_producer,
         for img in video_consumer.get_img():
             start_time = time.time()
             consume_count += 1
-
             #######################################
             # transform image from bytes to ndarray
             #######################################
@@ -111,8 +110,14 @@ def predict_and_label_frame(video_consumer , img_producer, probability_producer,
                 result = preprocessImage(np_img, crop_img = True, crop_part = ((x, y), (x+wd, y + hd)))
             else:
                 # deal with the whole original image
-                np_arr = np.fromstring(img, dtype = np.uint8) # one dimension array
-                np_img = cv2.imdecode(np_arr, cv2.IMREAD_COLOR)
+                # np_arr = np.fromstring(img, dtype = np.uint8) # one dimension array
+                # np_img = cv2.imdecode(np_arr, cv2.IMREAD_COLOR)
+                byte_img = base64.decodebytes(img)
+                np_img = cv2.imdecode(np.asarray(bytearray(byte_img), dtype=np.uint8), 1)
+                height, width, channel = np_img.shape
+                if height > 1000:
+                    np_img = cv2.resize(np_img, (int(width/2), int(height/2)))
+                print(np_img.shape)
                 result = preprocessImage(np_img)
 
             print('**********time consumed by face detection: {0}s'.format(time.time() - start_time))
@@ -178,7 +183,7 @@ if __name__ == '__main__':
     img_producer = ImageProducer()
     probability_producer = ProbabilityProducer()
     recorder = RedisRecorder()
-    process_camera_frame = True
+    process_camera_frame = False
     # pool = Pool(2)
     # record_dir = './detected_records/'
     # file_recorder = FileRecorder(record_dir)
