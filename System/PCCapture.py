@@ -1,4 +1,5 @@
 import cv2
+import base64
 import numpy as np
 from kafka import KafkaProducer
 
@@ -9,15 +10,9 @@ producer = KafkaProducer(bootstrap_servers= SERVER)
 cv2.namedWindow('video')
 capture = cv2.VideoCapture(0)
 _, frame = capture.read()
-#size = (int(capture.get(cv2.CAP_PROP_FRAME_WIDTH)),int(capture.get(cv2.CAP_PROP_FRAME_HEIGHT)))
-#vw = cv2.VideoWriter(vfile,cv2.VideoWriter_fourcc('M','J','P','G'), 30, size, 1)
 
 count = 0
 while frame is not None:
-    #cv2.imshow('Video', frame)
-    #print(np.shape(frame))
-    
-    #vw.write(frame)
     """
     key = cv2.waitKey(10)
     if key == ord('s'):     # 当按下"s"键时，将保存当前画面
@@ -28,6 +23,7 @@ while frame is not None:
     count += 1
     if count % 30 == 0:
         print('send {0} frames, shape {1}'.format(count//10, frame.shape))
-        producer.send('video', cv2.imencode('.jpeg', frame)[1].tostring())
+        img_str = cv2.imencode('.jpeg', frame)[1].tostring()
+        encoded_image = base64.b64encode(img_str)
+        producer.send('video', encoded_image)
     _, frame = capture.read()
-# cv2.destroyWindow('Video')
