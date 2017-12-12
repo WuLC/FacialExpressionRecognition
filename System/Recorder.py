@@ -84,7 +84,7 @@ class RedisRecorder():
 
     def write_record(self, img, emotion):
         # update count in the db
-        self.count += 1
+        self.count = int(self.conn.get('count')) + 1
         self.conn.set('count', str(self.count))
         # store image and label in the db
         record_name = 'face{0:06d}'.format(self.count)
@@ -129,5 +129,5 @@ if __name__ == '__main__':
     """
     redis_recorder = RedisRecorder()
     key_pattern = 'face*'
-    record_dir = './detected_records/'
+    record_dir = './detected_records/{0}/'.format(datetime.now().strftime("%Y%m%d"))
     redis_recorder.restore_record(key_pattern, record_dir)
