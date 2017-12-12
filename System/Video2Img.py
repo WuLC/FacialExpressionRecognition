@@ -89,6 +89,7 @@ def predict_and_label_frame(video_consumer , img_producer, probability_producer,
     """
     consume_count = 0
     produce_count = 0
+    processed = True
     while True:
         for img in video_consumer.get_img():
             start_time = time.time()
@@ -118,8 +119,13 @@ def predict_and_label_frame(video_consumer , img_producer, probability_producer,
                 if height > 1000:
                     np_img = cv2.resize(np_img, (int(width/2), int(height/2)))
                 print(np_img.shape)
-                result = preprocessImage(np_img)
-
+                # process every other frame
+                if processed:
+                    processed = False
+                    result = preprocessImage(np_img)
+                else:
+                    result = {'detected':False}
+                    processed = True
             print('**********time consumed by face detection: {0}s'.format(time.time() - start_time))
             
             start_time = time.time()
@@ -145,8 +151,11 @@ def predict_and_label_frame(video_consumer , img_producer, probability_producer,
                     emotion_distributions[COLOR_HEX[i]] = distribution
                     print('*****************probability_distribution: {0}'.format(probability_distribution))
                     
-                    # write the record to redis     
+                    # write the record to redis    
+                    # print(face_imgs[i].shape)
+                    # print(type(face_imgs[i][0][0][0]))
                     recorder.write_record(face_imgs[i].tostring(), emotion)
+                    # cv2.imwrite('./crop_imgs/{0}_{1}.jpg'.format(emotion, datetime.now().strftime("%Y%m%d%H%M%S")), face_imgs[i]) 
 
                     # add square and text to the human face in the image
                     left_top, right_bottom = face_points[i]
