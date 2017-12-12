@@ -64,9 +64,9 @@ class FileRecorder():
 
 class RedisRecorder():
     def __init__(self,
-                 HOST = 'XXXX',
+                 HOST = 'XXXXXX',
                  PORT = 6379,
-                 PASSWORD = 'XXXX',
+                 PASSWORD = 'XXXXXX',
                  DB = 0):
         try:
             self.conn = redis.Redis(host = HOST, port = PORT, password = PASSWORD, db= DB)
@@ -103,14 +103,13 @@ class RedisRecorder():
                 key = face_ids[i]
                 str_img = self.conn.hget(key, 'str_img')
                 emotion = self.conn.hget(key, 'emotion')
-                img = np.fromstring(str_img, dtype = np.uint8)
-                file_path = record_dir + '{0}.jpg'.format(key.decode('utf8'))
+                img = np.fromstring(str_img, dtype=np.uint8)
+                file_path = record_dir + '{0}_{1}.jpg'.format(emotion.decode('utf8'), key.decode('utf8'))
                 cv2.imwrite(file_path, img.reshape(resize_shape))
                 if i % 1000 == 0:
                     print('Dumping {0} records so far'.format(i))
             except Exception:
-                print('Exception while dumping record {0}'.format(str(key)))
-                continue
+                print('exception while dumping {0}'.format(key))
         print('Finish totally {0} records'.format(len(face_ids)))
             
 
