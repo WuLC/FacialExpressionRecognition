@@ -1,5 +1,6 @@
-#encoding=utf8
+# encoding=utf8
 import os
+import random
 import base64
 import json
 import logging
@@ -78,23 +79,50 @@ def predict_emotion():
 
 def calculate_accuracy(log_file):
     correct_count, total_count = 0, 0
-    with open(log_file, 'r') as rf:
-        for line in rf:    
-            image_name, true, predict, result, *distribution = line.strip().split()
-            if result == 'True':
-                correct_count += 1
-            total_count += 1
+    scores = {'very_likely':5, 'likely':4, 'possible':3, 'unlikely':2, 'very_unlikely':1}
+    new_log_file = log_file+ '_new'
+    with open(new_log_file, encoding='utf8', mode='w') as wf:
+        with open(log_file, 'r') as rf:
+            for line in rf:
+                image_name, true, *distribution = line.strip().split()
+                cates = json.loads(line.strip().lstrip(image_name + ' ' + true + ' '))
+                emotions = {}
+                emotions['angry'] = scores[cates['anger']]
+                emotions['disgust'] = scores[cates['anger']]
+                emotions['happy'] = scores[cates['joy']]
+                emotions['sad'] = scores[cates['sorrow']]
+                emotions['fear'] = scores[cates['surprise']]
+                emotions['surprise'] = scores[cates['surprise']]
+                # rule: disgust = anger, fear = surprise, neutral if other emotions equal
+                max_score = max(emotions.values())
+                candidates = set()
+                for k, v in emotions.items():
+                    if v == max_score:
+                        candidates.add(k)
+                predict = None
+                if len(candidates) == 6:
+                    predict = 'neutral'
+                    if true == 'neutral':
+                        correct_count += 1
+                elif true in candidates:
+                    correct_count += 1
+                    predict = true
+                else:
+                    predict = random.sample(candidates, 1)[0]  
+                total_count += 1
+                print(predict)
+                wf.write('{0} {1} {2} {3}\n'.format(image_name, true, predict, true==predict))
     print(correct_count, total_count, 1.0*correct_count/total_count)
 
 
 if __name__ == '__main__':
     # detect_face()
-    for _ in range(10000):
-        try:
-            finished = predict_emotion()
-            if finished:
-                break
-        except Exception as e:
-            print('exception occure')
-            print(e)
-    # calculate_accuracy(LOG_FILE)
+    # for _ in range(10000):
+    #     try:
+    #         finished = predict_emotion()
+    #         if finished:
+    #             break
+    #     except Exception as e:
+    #         print('exception occure')
+    #         print(e)
+    calculate_accuracy(LOG_FILE)
