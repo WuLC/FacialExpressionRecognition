@@ -1,1 +1,2 @@
-* text=crlf
+# Ignore all differences in line endings
+*        -crlf
