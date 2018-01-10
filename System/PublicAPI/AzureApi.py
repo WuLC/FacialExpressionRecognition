@@ -9,7 +9,7 @@ from sklearn.metrics import confusion_matrix
 headers = {
     # Request headers. Replace the placeholder key below with your subscription key.
     'Content-Type': 'application/octet-stream',
-    'Ocp-Apim-Subscription-Key': '2560d98149a7443193190f99389e6fc7',
+    'Ocp-Apim-Subscription-Key': 'XXXXXXXXX',
 }
 
 server = 'https://westus.api.cognitive.microsoft.com/emotion/v1.0/recognize'
