@@ -7,7 +7,7 @@ import logging
 
 import requests
 
-key = 'XXXXXXXX' # replace your key
+key = 'XXXXXXXX' # replace with your key from https://cloud.google.com/vision/
 request_url =  'https://vision.googleapis.com/v1/images:annotate?key={0}'.format(key)
 
 
