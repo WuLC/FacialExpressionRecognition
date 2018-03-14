@@ -41,6 +41,8 @@ def getModelPathForPrediction(mid=0):
         mp = MP+'D502_M1_N4_T0_V0_R7_20171010011707_1.2429453135_.ckpt-8716'
     elif mid == 414:
         mp = MP+'D502_M1_N4_T1_V1_R0_20171010021312_1.1981185675_.ckpt-4260'
+    elif mid == 415:
+        mp = MP+'M602'
     else:
         print('Unexpected Model ID. TRY another one.')
         exit(-1)
