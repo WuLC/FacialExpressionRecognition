@@ -4,12 +4,13 @@
 # EMail: liangchaowu5@gmail.com
 
 import os 
-os.environ['TF_CPP_MIN_LOG_LEVEL']='0'
-os.environ["CUDA_VISIBLE_DEVICES"]='2'
+os.environ['TF_CPP_MIN_LOG_LEVEL']='1'
+os.environ["CUDA_VISIBLE_DEVICES"]='0'
 import time
 from collections import deque
 
 import fire
+import visdom
 import numpy as np
 from keras.preprocessing import image
 from keras.utils import np_utils
@@ -20,16 +21,17 @@ from keras import optimizers
 from tqdm import tqdm
 
 
-
 # global variables
+DATASET = 'CKPlus'
 categories = 7
 FIX_INPUT_LEN = True
-fixed_seq_len = 10
+FIX_SEQ_LEN = 8
+VIS = visdom.Visdom(env = DATASET)
 
 def build_model():
     pretrained_cnn = VGG16(weights='imagenet', include_top=False)
     # pretrained_cnn.trainable = False
-    for layer in pretrained_cnn.layers[:-5]: # keep some layers non-trainable (weights will not be updated)
+    for layer in pretrained_cnn.layers[:-3]: # keep some layers non-trainable (weights will not be updated)
         layer.trainable = False
     input = Input(shape = (224, 224, 3))
     x = pretrained_cnn(input)
@@ -41,7 +43,7 @@ def build_model():
     input_shape = (None, 224, 224, 3) # (seq_len, width, height, channel)
     model = Sequential()
     model.add(TimeDistributed(pretrained_cnn, input_shape=input_shape))
-    model.add(GRU(1024, kernel_initializer='orthogonal', bias_initializer='ones', dropout=0.5, recurrent_dropout=0.5))
+    model.add(GRU(2048, kernel_initializer='orthogonal', bias_initializer='ones', dropout=0.5, recurrent_dropout=0.5))
     model.add(Dense(categories, activation = 'softmax'))
 
     model.compile(loss='categorical_crossentropy',
@@ -113,16 +115,26 @@ def evaluate_var_len_data(model, val_data):
     return score/count
 
 
+def visualize(train_accuracy, val_accuracy, title='default'):
+    assert len(train_accuracy) == len(val_accuracy)
+    x_epoch = list(range(len(train_accuracy)))
+    train_acc = dict(x=x_epoch, y=train_accuracy, type='custom', name='train')
+    val_acc = dict(x=x_epoch, y=val_accuracy, type='custom', name='val')
+    layout=dict(title=title, xaxis={'title':'epochs'}, yaxis={'title':'accuracy'})
+    data = [train_acc, val_acc]
+    VIS._send({'data':data, 'layout':layout, 'win':title})
+
+
 def train():
     data_dir = 'F:/FaceExpression/TrainSet/CK+/10_fold/'
-    scores = []
     start_time = time.time()
     epochs = 100
     val_fold = 9
+    train_accuracy, val_accuracy = [], []
     model = build_model()
     if FIX_INPUT_LEN:
-        batch_size = 20
-        X, Y = load_fix_len_dataset(data_dir)
+        batch_size = 15
+        X, Y = load_fix_len_dataset(data_dir, FIX_SEQ_LEN)
         X_train, Y_train = [], []
         for i in range(10):
             if i == val_fold:
@@ -137,9 +149,12 @@ def train():
         print(X_test.shape, Y_test.shape)        
         for epoch in tqdm(range(epochs)):
             model.fit(X_train, Y_train, batch_size= batch_size, epochs=1)
-            s = model.evaluate(X_test, Y_test, batch_size = batch_size, verbose=0)[1]
-            scores.append(s)
-            print('val accuracy for {0} epoch:{1}'.format(epoch, s))
+            train_acc = model.evaluate(X_train, Y_train, batch_size = batch_size, verbose=0)[1]
+            val_acc = model.evaluate(X_test, Y_test, batch_size = batch_size, verbose=0)[1]
+            train_accuracy.append(train_acc)
+            val_accuracy.append(val_acc)
+            if (epoch+1) % 5 == 0:
+                visualize(train_accuracy, val_accuracy, title = 'FIX{0}_VGG16_FintTune3_Dense2048_LSTM2048_bs{1}'.format(FIX_SEQ_LEN, batch_size))
     else:
         dataset = load_var_len_dataset(data_dir)
         for epoch in tqdm(range(epochs)):
