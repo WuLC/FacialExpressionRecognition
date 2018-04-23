@@ -21,34 +21,48 @@ from keras import optimizers
 from tqdm import tqdm
 
 
-# global variables
-DATASET = 'CKPlus'
-categories = 7
-FIX_INPUT_LEN = True
-FIX_SEQ_LEN = 8
-VIS = visdom.Visdom(env = DATASET)
+class Configuration:
+    def __init__(self):
+        self.dataset = 'CKPlus'
+        self.vis = visdom.Visdom(env = self.dataset)
+
+        # input and output
+        self.categories = 7
+        self.fix_input_len = True
+        self.fixed_seq_len = 8
+        self.img_size = (224, 224, 3)
+        self.input_size = (None, 224, 224, 3) # (seq_len, width, height, channel)
+        
+        # training
+        self.batch_size = 15
+        self.epochs = 100
+        self.optimizer = optimizers.SGD(lr=0.01, momentum=0.9, clipnorm=1., clipvalue=0.5)
+
+
+CONF = Configuration()
+
 
 def build_model():
     pretrained_cnn = VGG16(weights='imagenet', include_top=False)
     # pretrained_cnn.trainable = False
     for layer in pretrained_cnn.layers[:-3]: # keep some layers non-trainable (weights will not be updated)
         layer.trainable = False
-    input = Input(shape = (224, 224, 3))
+    input = Input(shape = CONF.img_size)
     x = pretrained_cnn(input)
     x = Flatten()(x)
     x = Dense(2048)(x)
     x = Dropout(0.5)(x)
     pretrained_cnn = Model(inputs = input, output = x)
 
-    input_shape = (None, 224, 224, 3) # (seq_len, width, height, channel)
+    input_shape = CONF.input_size
     model = Sequential()
     model.add(TimeDistributed(pretrained_cnn, input_shape=input_shape))
     model.add(GRU(2048, kernel_initializer='orthogonal', bias_initializer='ones', dropout=0.5, recurrent_dropout=0.5))
-    model.add(Dense(categories, activation = 'softmax'))
+    model.add(Dense(CONF.categories, activation = 'softmax'))
 
     model.compile(loss='categorical_crossentropy',
-                optimizer = optimizers.SGD(lr=0.01, momentum=0.9, clipnorm=1., clipvalue=0.5),
-                metrics=['accuracy'])
+                 optimizer = CONF.optimizer,
+                 metrics=['accuracy'])
     return model
 
 
@@ -56,11 +70,11 @@ def load_sample(img_dir, fixed_seq_len = None):
     label = int(img_dir.split('/')[-2].split('_')[0]) - 1
     img_names = sorted(os.listdir(img_dir))
     imgs = []
-    if FIX_INPUT_LEN: # extract certain length of sequence
+    if CONF.fix_input_len: # extract certain length of sequence
         block_len = round(len(img_names)/fixed_seq_len)
         idx = len(img_names) - 1
         tmp = deque()
-        for _ in range(fixed_seq_len):
+        for _ in range(CONF.fixed_seq_len):
             tmp.appendleft(img_names[idx])
             idx = max(idx-block_len, 0)
         img_names = tmp
@@ -70,10 +84,10 @@ def load_sample(img_dir, fixed_seq_len = None):
         x = image.img_to_array(img)
         imgs.append(x)
     imgs = np.array(imgs)
-    label = np_utils.to_categorical(label, num_classes=categories)
-    if not FIX_INPUT_LEN:
+    label = np_utils.to_categorical(label, num_classes= CONF.categories)
+    if not CONF.fix_input_len:
         imgs = np.expand_dims(imgs, axis=0)
-        label = label.reshape(-1, categories)
+        label = label.reshape(-1, CONF.categories)
     return imgs, label
 
 
@@ -122,19 +136,17 @@ def visualize(train_accuracy, val_accuracy, title='default'):
     val_acc = dict(x=x_epoch, y=val_accuracy, type='custom', name='val')
     layout=dict(title=title, xaxis={'title':'epochs'}, yaxis={'title':'accuracy'})
     data = [train_acc, val_acc]
-    VIS._send({'data':data, 'layout':layout, 'win':title})
+    CONF.vis._send({'data':data, 'layout':layout, 'win':title})
 
 
 def train():
     data_dir = 'F:/FaceExpression/TrainSet/CK+/10_fold/'
     start_time = time.time()
-    epochs = 100
     val_fold = 9
     train_accuracy, val_accuracy = [], []
     model = build_model()
-    if FIX_INPUT_LEN:
-        batch_size = 15
-        X, Y = load_fix_len_dataset(data_dir, FIX_SEQ_LEN)
+    if CONF.fix_input_len:
+        X, Y = load_fix_len_dataset(data_dir, CONF.fixed_seq_len)
         X_train, Y_train = [], []
         for i in range(10):
             if i == val_fold:
@@ -147,25 +159,24 @@ def train():
         Y_train = np.concatenate(Y_train, axis = 0)
         print(X_train.shape, Y_train.shape)
         print(X_test.shape, Y_test.shape)        
-        for epoch in tqdm(range(epochs)):
-            model.fit(X_train, Y_train, batch_size= batch_size, epochs=1)
-            train_acc = model.evaluate(X_train, Y_train, batch_size = batch_size, verbose=0)[1]
-            val_acc = model.evaluate(X_test, Y_test, batch_size = batch_size, verbose=0)[1]
+        for epoch in tqdm(range(CONF.epochs)):
+            model.fit(X_train, Y_train, batch_size= CONF.batch_size, epochs=1)
+            train_acc = model.evaluate(X_train, Y_train, batch_size = CONF.batch_size, verbose=0)[1]
+            val_acc = model.evaluate(X_test, Y_test, batch_size = CONF.batch_size, verbose=0)[1]
             train_accuracy.append(train_acc)
             val_accuracy.append(val_acc)
             if (epoch+1) % 5 == 0:
-                visualize(train_accuracy, val_accuracy, title = 'FIX{0}_VGG16_FintTune3_Dense2048_LSTM2048_bs{1}'.format(FIX_SEQ_LEN, batch_size))
+                visualize(train_accuracy, val_accuracy, title = 'FIX{0}_VGG16_FintTune3_Dense2048_LSTM2048_bs{1}'.format(CONF.fixed_seq_len, CONF.batch_size))
     else:
         dataset = load_var_len_dataset(data_dir)
-        for epoch in tqdm(range(epochs)):
+        for epoch in tqdm(range(CONF.epochs)):
             for i in range(10):
                 if i != val_fold:
                     for x, y in dataset[i]:
                         model.fit(x, y, batch_size=1, epochs=1,verbose=0)
-            s = evaluate_var_len_data(model, dataset[val_fold])
-            scores.append(s)
+            val_acc = evaluate_var_len_data(model, dataset[val_fold])
+            val_accuracy.append(val)
             print('val accuracy for {0} epoch:{1}'.format(epoch, s))
-    print(scores)
     print('time consuming for {0} epochs: {1}s'.format(epochs, time.time()-start_time))
 
 
