@@ -7,18 +7,24 @@ import os
 os.environ['TF_CPP_MIN_LOG_LEVEL']='1'
 os.environ["CUDA_VISIBLE_DEVICES"]='0'
 import time
+import gc
 from collections import deque
+from datetime import datetime
 
 import fire
 import visdom
 import numpy as np
+from tqdm import tqdm
 from keras.preprocessing import image
 from keras.utils import np_utils
 from keras.applications.vgg16 import VGG16
+from keras.applications.vgg19 import VGG19
+from keras.applications.inception_v3 import InceptionV3
+from keras.applications.resnet50 import ResNet50
 from keras.models import Sequential, Model
-from keras.layers import Input, TimeDistributed, Flatten, GRU, Dense, Dropout
+from keras.layers import Input, TimeDistributed, Flatten, GRU, Dense, Dropout, LSTM
 from keras import optimizers
-from tqdm import tqdm
+from keras import backend as K
 
 
 class Configuration:
@@ -34,18 +40,18 @@ class Configuration:
         self.input_size = (None, 224, 224, 3) # (seq_len, width, height, channel)
         
         # training
-        self.batch_size = 15
+        self.batch_size = 10
         self.epochs = 100
-        self.optimizer = optimizers.SGD(lr=0.01, momentum=0.9, clipnorm=1., clipvalue=0.5)
+        # self.optimizer = optimizers.SGD(lr=0.01, momentum=0.9, clipnorm=1., clipvalue=0.5)
 
 
 CONF = Configuration()
 
 
 def build_model():
-    pretrained_cnn = VGG16(weights='imagenet', include_top=False)
+    pretrained_cnn = VGG19(weights='imagenet', include_top=False)
     # pretrained_cnn.trainable = False
-    for layer in pretrained_cnn.layers[:-3]: # keep some layers non-trainable (weights will not be updated)
+    for layer in pretrained_cnn.layers[:-4]: # keep some layers non-trainable (weights will not be updated)
         layer.trainable = False
     input = Input(shape = CONF.img_size)
     x = pretrained_cnn(input)
@@ -57,11 +63,11 @@ def build_model():
     input_shape = CONF.input_size
     model = Sequential()
     model.add(TimeDistributed(pretrained_cnn, input_shape=input_shape))
-    model.add(GRU(2048, kernel_initializer='orthogonal', bias_initializer='ones', dropout=0.5, recurrent_dropout=0.5))
+    model.add(GRU(1024, kernel_initializer='orthogonal', bias_initializer='ones', dropout=0.5, recurrent_dropout=0.5))
     model.add(Dense(CONF.categories, activation = 'softmax'))
 
     model.compile(loss='categorical_crossentropy',
-                 optimizer = CONF.optimizer,
+                 optimizer = optimizers.SGD(lr=0.01, momentum=0.9, clipnorm=1., clipvalue=0.5), # CONF.optimizer,
                  metrics=['accuracy'])
     return model
 
@@ -142,31 +148,39 @@ def visualize(train_accuracy, val_accuracy, title='default'):
 def train():
     data_dir = 'F:/FaceExpression/TrainSet/CK+/10_fold/'
     start_time = time.time()
-    val_fold = 9
-    train_accuracy, val_accuracy = [], []
-    model = build_model()
+    best_result = []
+    val_fold = 1
     if CONF.fix_input_len:
         X, Y = load_fix_len_dataset(data_dir, CONF.fixed_seq_len)
-        X_train, Y_train = [], []
-        for i in range(10):
-            if i == val_fold:
-                X_test = X[i]
-                Y_test = Y[i]
-            else:
-                X_train.append(X[i])
-                Y_train.append(Y[i])
-        X_train = np.concatenate(X_train, axis = 0)
-        Y_train = np.concatenate(Y_train, axis = 0)
-        print(X_train.shape, Y_train.shape)
-        print(X_test.shape, Y_test.shape)        
-        for epoch in tqdm(range(CONF.epochs)):
-            model.fit(X_train, Y_train, batch_size= CONF.batch_size, epochs=1)
-            train_acc = model.evaluate(X_train, Y_train, batch_size = CONF.batch_size, verbose=0)[1]
-            val_acc = model.evaluate(X_test, Y_test, batch_size = CONF.batch_size, verbose=0)[1]
-            train_accuracy.append(train_acc)
-            val_accuracy.append(val_acc)
-            if (epoch+1) % 5 == 0:
-                visualize(train_accuracy, val_accuracy, title = 'FIX{0}_VGG16_FintTune3_Dense2048_LSTM2048_bs{1}'.format(CONF.fixed_seq_len, CONF.batch_size))
+        for val_fold in range(0, 10):
+            train_accuracy, val_accuracy = [], []
+            model = build_model()
+            X_train, Y_train = [], []
+            for i in range(10):
+                if i == val_fold:
+                    X_test = X[i]
+                    Y_test = Y[i]
+                else:
+                    X_train.append(X[i])
+                    Y_train.append(Y[i])
+            X_train = np.concatenate(X_train, axis = 0)
+            Y_train = np.concatenate(Y_train, axis = 0)
+            print(X_train.shape, Y_train.shape)
+            print(X_test.shape, Y_test.shape)       
+            for epoch in tqdm(range(CONF.epochs)):
+                model.fit(X_train, Y_train, batch_size= CONF.batch_size, epochs=1)
+                train_acc = model.evaluate(X_train, Y_train, batch_size = CONF.batch_size, verbose=0)[1]
+                val_acc = model.evaluate(X_test, Y_test, batch_size = CONF.batch_size, verbose=0)[1]
+                train_accuracy.append(train_acc)
+                val_accuracy.append(val_acc)
+                if (epoch+1) % 5 == 0:
+                    visualize(train_accuracy, val_accuracy, title = 'Fold{0}_FIX{1}_VGG16_FintTune3_Dense1024_LSTM2048_bs{2}'.format(\
+                    val_fold, CONF.fixed_seq_len, CONF.batch_size))
+            best_result.append(max(val_accuracy))
+            print(best_result)
+            # release the memory of GPU taken by the model of last fold
+            K.clear_session()
+            gc.collect() 
     else:
         dataset = load_var_len_dataset(data_dir)
         for epoch in tqdm(range(CONF.epochs)):
@@ -177,7 +191,8 @@ def train():
             val_acc = evaluate_var_len_data(model, dataset[val_fold])
             val_accuracy.append(val)
             print('val accuracy for {0} epoch:{1}'.format(epoch, s))
-    print('time consuming for {0} epochs: {1}s'.format(epochs, time.time()-start_time))
+        
+    print('[{0}] time consuming for {1} epochs: {2}s'.format(str(datetime.now()), CONF.epochs, int(time.time()-start_time)))
 
 
 if __name__ == '__main__':
