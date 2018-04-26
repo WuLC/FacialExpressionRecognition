@@ -21,8 +21,9 @@ from keras.applications.vgg16 import VGG16
 from keras.applications.vgg19 import VGG19
 from keras.applications.inception_v3 import InceptionV3
 from keras.applications.resnet50 import ResNet50
+from keras.applications.densenet import DenseNet121
 from keras.models import Sequential, Model
-from keras.layers import Input, TimeDistributed, Flatten, GRU, Dense, Dropout, LSTM
+from keras.layers import Input, TimeDistributed, Flatten, GRU, Dense, Dropout, LSTM, Bidirectional
 from keras import optimizers
 from keras import backend as K
 
@@ -35,21 +36,24 @@ class Configuration:
         # input and output
         self.categories = 7
         self.fix_input_len = True
-        self.fixed_seq_len = 8
+        self.fixed_seq_len = 5
         self.img_size = (224, 224, 3)
         self.input_size = (None, 224, 224, 3) # (seq_len, width, height, channel)
         
         # training
-        self.batch_size = 10
+        self.batch_size = 15
         self.epochs = 100
         # self.optimizer = optimizers.SGD(lr=0.01, momentum=0.9, clipnorm=1., clipvalue=0.5)
+
+        # RNN parameters
+        self.hidden_dim = 2048
 
 
 CONF = Configuration()
 
 
 def build_model():
-    pretrained_cnn = VGG19(weights='imagenet', include_top=False)
+    pretrained_cnn = VGG16(weights='imagenet', include_top=False)
     # pretrained_cnn.trainable = False
     for layer in pretrained_cnn.layers[:-4]: # keep some layers non-trainable (weights will not be updated)
         layer.trainable = False
@@ -63,7 +67,8 @@ def build_model():
     input_shape = CONF.input_size
     model = Sequential()
     model.add(TimeDistributed(pretrained_cnn, input_shape=input_shape))
-    model.add(GRU(1024, kernel_initializer='orthogonal', bias_initializer='ones', dropout=0.5, recurrent_dropout=0.5))
+    # model.add(Bidirectional(GRU(1024, kernel_initializer='orthogonal', bias_initializer='ones', dropout=0.5, recurrent_dropout=0.5)))
+    model.add(GRU(CONF.hidden_dim, kernel_initializer='orthogonal', bias_initializer='ones', dropout=0.5, recurrent_dropout=0.5))
     model.add(Dense(CONF.categories, activation = 'softmax'))
 
     model.compile(loss='categorical_crossentropy',
@@ -132,7 +137,7 @@ def evaluate_var_len_data(model, val_data):
         score += model.evaluate(x, y, batch_size = 1, verbose=0)[1]
         count += 1
     # print('===========val accuracy: {0}'.format(score/count))
-    return score/count
+    return (score, count)
 
 
 def visualize(train_accuracy, val_accuracy, title='default'):
@@ -174,8 +179,8 @@ def train():
                 train_accuracy.append(train_acc)
                 val_accuracy.append(val_acc)
                 if (epoch+1) % 5 == 0:
-                    visualize(train_accuracy, val_accuracy, title = 'Fold{0}_FIX{1}_VGG16_FintTune3_Dense1024_LSTM2048_bs{2}'.format(\
-                    val_fold, CONF.fixed_seq_len, CONF.batch_size))
+                    visualize(train_accuracy, val_accuracy, title = 'Fold{0}_FixLen{1}_VGG16_GRU{2}_bs{3}'.format(\
+                    val_fold, CONF.fixed_seq_len, CONF.hidden_dim, CONF.batch_size))
             best_result.append(max(val_accuracy))
             print(best_result)
             # release the memory of GPU taken by the model of last fold
@@ -183,15 +188,28 @@ def train():
             gc.collect() 
     else:
         dataset = load_var_len_dataset(data_dir)
-        for epoch in tqdm(range(CONF.epochs)):
-            for i in range(10):
-                if i != val_fold:
-                    for x, y in dataset[i]:
-                        model.fit(x, y, batch_size=1, epochs=1,verbose=0)
-            val_acc = evaluate_var_len_data(model, dataset[val_fold])
-            val_accuracy.append(val)
-            print('val accuracy for {0} epoch:{1}'.format(epoch, s))
-        
+        # 10-fold cross validation for input data with variable length
+        for val_fold in range(0, 10):
+            train_accuracy, val_accuracy = [], []
+            model = build_model()
+            for epoch in tqdm(range(CONF.epochs)):
+                for i in range(10):
+                    if i != val_fold:
+                        for x, y in dataset[i]:
+                            model.fit(x, y, batch_size=1, epochs=1,verbose=0)
+                total_train_score, total_train_count = 0, 0
+                for i in range(10):
+                    score, count = evaluate_var_len_data(model, dataset[i])
+                    if i == val_fold:
+                        val_acc = score/count
+                    else:
+                        total_train_score += score
+                        total_train_count += count
+                train_accuracy.append(total_train_score/total_train_count)
+                val_accuracy.append(val_acc)
+                if (epoch+1) % 5 == 0:
+                    visualize(train_accuracy, val_accuracy, title = 'Fold{0}_VarLen_VGG16_GRU{1}_bs{2}'.format(\
+                    val_fold, CONF.hidden_dim, CONF.batch_size))
     print('[{0}] time consuming for {1} epochs: {2}s'.format(str(datetime.now()), CONF.epochs, int(time.time()-start_time)))
 
 
