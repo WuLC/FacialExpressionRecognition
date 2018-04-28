@@ -5,7 +5,7 @@
 
 import os 
 os.environ['TF_CPP_MIN_LOG_LEVEL']='1'
-os.environ["CUDA_VISIBLE_DEVICES"]='0'
+os.environ["CUDA_VISIBLE_DEVICES"]='1'
 import time
 import gc
 from collections import deque
@@ -35,7 +35,7 @@ class Configuration:
 
         # input and output
         self.categories = 7
-        self.fix_input_len = True
+        self.fix_input_len = False
         self.fixed_seq_len = 5
         self.img_size = (224, 224, 3)
         self.input_size = (None, 224, 224, 3) # (seq_len, width, height, channel)
@@ -46,7 +46,7 @@ class Configuration:
         # self.optimizer = optimizers.SGD(lr=0.01, momentum=0.9, clipnorm=1., clipvalue=0.5)
 
         # RNN parameters
-        self.hidden_dim = 2048
+        self.hidden_dim = 1024
 
 
 CONF = Configuration()
