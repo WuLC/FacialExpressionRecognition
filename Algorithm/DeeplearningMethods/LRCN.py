@@ -5,7 +5,7 @@
 
 import os 
 os.environ['TF_CPP_MIN_LOG_LEVEL']='1'
-os.environ["CUDA_VISIBLE_DEVICES"]='1'
+os.environ["CUDA_VISIBLE_DEVICES"]='2'
 import time
 import gc
 from collections import deque
@@ -35,14 +35,14 @@ class Configuration:
 
         # input and output
         self.categories = 7
-        self.fix_input_len = False
+        self.fix_input_len = True
         self.fixed_seq_len = 5
         self.img_size = (224, 224, 3)
         self.input_size = (None, 224, 224, 3) # (seq_len, width, height, channel)
         
         # training
         self.batch_size = 15
-        self.epochs = 100
+        self.epochs = 120
         # self.optimizer = optimizers.SGD(lr=0.01, momentum=0.9, clipnorm=1., clipvalue=0.5)
 
         # RNN parameters
@@ -62,15 +62,14 @@ def build_model():
     x = Flatten()(x)
     x = Dense(2048)(x)
     x = Dropout(0.5)(x)
-    pretrained_cnn = Model(inputs = input, output = x)
+    pretrained_cnn = Model(inputs = input, outputs = x)
 
     input_shape = CONF.input_size
     model = Sequential()
     model.add(TimeDistributed(pretrained_cnn, input_shape=input_shape))
     # model.add(Bidirectional(GRU(1024, kernel_initializer='orthogonal', bias_initializer='ones', dropout=0.5, recurrent_dropout=0.5)))
-    model.add(GRU(CONF.hidden_dim, kernel_initializer='orthogonal', bias_initializer='ones', dropout=0.5, recurrent_dropout=0.5))
-    model.add(Dense(CONF.categories, activation = 'softmax'))
-
+    model.add(GRU(CONF.hidden_dim, kernel_initializer='orthogonal', bias_initializer='ones', dropout=0.5, recurrent_dropout=0.5, return_sequences=False))
+    #model.add(Dense(CONF.categories, activation = 'softmax'))
     model.compile(loss='categorical_crossentropy',
                  optimizer = optimizers.SGD(lr=0.01, momentum=0.9, clipnorm=1., clipvalue=0.5), # CONF.optimizer,
                  metrics=['accuracy'])
@@ -100,6 +99,15 @@ def load_sample(img_dir, fixed_seq_len = None):
         imgs = np.expand_dims(imgs, axis=0)
         label = label.reshape(-1, CONF.categories)
     return imgs, label
+
+
+def test_model():
+    img_dir = 'E:/FaceExpression/TrainSet/CK+/10_fold/g1/1_S010_004/'
+    imgs, label = load_sample(img_dir, fixed_seq_len=5)
+    model = build_model()
+    imgs = np.expand_dims(imgs, axis=0)
+    output = model.predict(imgs)
+    print(output.shape)
 
 
 def load_var_len_dataset(data_dir):
@@ -151,7 +159,7 @@ def visualize(train_accuracy, val_accuracy, title='default'):
 
 
 def train():
-    data_dir = 'F:/FaceExpression/TrainSet/CK+/10_fold/'
+    data_dir = 'E:/FaceExpression/TrainSet/CK+/10_fold/'
     start_time = time.time()
     best_result = []
     val_fold = 1
@@ -179,7 +187,7 @@ def train():
                 train_accuracy.append(train_acc)
                 val_accuracy.append(val_acc)
                 if (epoch+1) % 5 == 0:
-                    visualize(train_accuracy, val_accuracy, title = 'Fold{0}_FixLen{1}_VGG16_GRU{2}_bs{3}'.format(\
+                    visualize(train_accuracy, val_accuracy, title = 'Fold{0}_FixLen{1}_Inceptionv3_GRU{2}_bs{3}'.format(\
                     val_fold, CONF.fixed_seq_len, CONF.hidden_dim, CONF.batch_size))
             best_result.append(max(val_accuracy))
             print(best_result)
@@ -196,6 +204,7 @@ def train():
                 for i in range(10):
                     if i != val_fold:
                         for x, y in dataset[i]:
+                            print(x.shape, y.shape)
                             model.fit(x, y, batch_size=1, epochs=1,verbose=0)
                 total_train_score, total_train_count = 0, 0
                 for i in range(10):
