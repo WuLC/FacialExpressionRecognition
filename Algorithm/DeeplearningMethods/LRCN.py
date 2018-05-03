@@ -5,7 +5,7 @@
 
 import os 
 os.environ['TF_CPP_MIN_LOG_LEVEL']='1'
-os.environ["CUDA_VISIBLE_DEVICES"]='2'
+os.environ["CUDA_VISIBLE_DEVICES"]='0'
 import time
 import gc
 from collections import deque
@@ -42,11 +42,11 @@ class Configuration:
         
         # training
         self.batch_size = 15
-        self.epochs = 120
+        self.epochs = 100
         # self.optimizer = optimizers.SGD(lr=0.01, momentum=0.9, clipnorm=1., clipvalue=0.5)
 
         # RNN parameters
-        self.hidden_dim = 1024
+        self.hidden_dim = 512
 
 
 CONF = Configuration()
@@ -69,19 +69,19 @@ def build_model():
     model.add(TimeDistributed(pretrained_cnn, input_shape=input_shape))
     # model.add(Bidirectional(GRU(1024, kernel_initializer='orthogonal', bias_initializer='ones', dropout=0.5, recurrent_dropout=0.5)))
     model.add(GRU(CONF.hidden_dim, kernel_initializer='orthogonal', bias_initializer='ones', dropout=0.5, recurrent_dropout=0.5, return_sequences=False))
-    #model.add(Dense(CONF.categories, activation = 'softmax'))
+    model.add(Dense(CONF.categories, activation = 'softmax'))
     model.compile(loss='categorical_crossentropy',
                  optimizer = optimizers.SGD(lr=0.01, momentum=0.9, clipnorm=1., clipvalue=0.5), # CONF.optimizer,
                  metrics=['accuracy'])
     return model
 
 
-def load_sample(img_dir, fixed_seq_len = None):
+def load_sample(img_dir):
     label = int(img_dir.split('/')[-2].split('_')[0]) - 1
     img_names = sorted(os.listdir(img_dir))
     imgs = []
     if CONF.fix_input_len: # extract certain length of sequence
-        block_len = round(len(img_names)/fixed_seq_len)
+        block_len = round(len(img_names)/CONF.fixed_seq_len)
         idx = len(img_names) - 1
         tmp = deque()
         for _ in range(CONF.fixed_seq_len):
@@ -123,14 +123,32 @@ def load_var_len_dataset(data_dir):
     return dataset
 
 
-def load_fix_len_dataset(data_dir, fixed_seq_len = 6):
+def load_dataset_mean_std(data_dir):
+    X, Y = [], []
+    for i in range(1, 11):
+        group_dir = data_dir + 'g{0}/'.format(i)
+        for d in os.listdir(group_dir):
+            img_dir = group_dir + d + '/'
+            x, y = load_sample(img_dir)
+            X.append(x)
+            Y.append(y)
+    X = np.array(X)
+    X = X.reshape(-1, 224, 224, 3)
+    # print(X.shape)
+    X_mean = np.mean(X, axis=0)
+    X_std = np.std(X, axis=0)
+    # print(X_mean.shape, X_std.shape)
+    return X_mean, X_std
+
+
+def load_fix_len_dataset(data_dir):
     X, Y = [], []
     for i in range(1, 11):
         tx, ty = [], []
         group_dir = data_dir + 'g{0}/'.format(i)
         for d in os.listdir(group_dir):
             img_dir = group_dir + d + '/'
-            x, y = load_sample(img_dir, fixed_seq_len=fixed_seq_len)
+            x, y = load_sample(img_dir)
             tx.append(x)
             ty.append(y)
         #print(np.array(tx).shape, np.array(ty).shape)
@@ -164,7 +182,7 @@ def train():
     best_result = []
     val_fold = 1
     if CONF.fix_input_len:
-        X, Y = load_fix_len_dataset(data_dir, CONF.fixed_seq_len)
+        X, Y = load_fix_len_dataset(data_dir)
         for val_fold in range(0, 10):
             train_accuracy, val_accuracy = [], []
             model = build_model()
