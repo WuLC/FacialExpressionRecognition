@@ -31,6 +31,7 @@ from keras import backend as K
 class Configuration:
     def __init__(self):
         self.dataset = 'CKPlus'
+        self.data_dir = 'E:/FaceExpression/TrainSet/CK+/10_fold/'
         self.vis = visdom.Visdom(env = self.dataset)
 
         # input and output
@@ -42,11 +43,16 @@ class Configuration:
         
         # training
         self.batch_size = 15
-        self.epochs = 100
+        self.epochs = 50
         # self.optimizer = optimizers.SGD(lr=0.01, momentum=0.9, clipnorm=1., clipvalue=0.5)
 
         # RNN parameters
         self.hidden_dim = 512
+
+        # mean and std of dataset
+        self.standardize = True
+        self.mean = None
+        self.std = None
 
 
 CONF = Configuration()
@@ -92,6 +98,8 @@ def load_sample(img_dir):
         img_path = img_dir + img_name
         img = image.load_img(img_path, target_size=(224, 224))
         x = image.img_to_array(img)
+        if CONF.standardize and not (CONF.mean is None and CONF.std is None):
+            x = (x-CONF.mean)/CONF.std
         imgs.append(x)
     imgs = np.array(imgs)
     label = np_utils.to_categorical(label, num_classes= CONF.categories)
@@ -103,7 +111,7 @@ def load_sample(img_dir):
 
 def test_model():
     img_dir = 'E:/FaceExpression/TrainSet/CK+/10_fold/g1/1_S010_004/'
-    imgs, label = load_sample(img_dir, fixed_seq_len=5)
+    imgs, label = load_sample(img_dir)
     model = build_model()
     imgs = np.expand_dims(imgs, axis=0)
     output = model.predict(imgs)
@@ -177,12 +185,14 @@ def visualize(train_accuracy, val_accuracy, title='default'):
 
 
 def train():
-    data_dir = 'E:/FaceExpression/TrainSet/CK+/10_fold/'
+    global CONF
+    CONF.mean, CONF.std = load_dataset_mean_std(CONF.data_dir)
+    print(CONF.mean.shape, CONF.std.shape)
     start_time = time.time()
     best_result = []
     val_fold = 1
     if CONF.fix_input_len:
-        X, Y = load_fix_len_dataset(data_dir)
+        X, Y = load_fix_len_dataset(CONF.data_dir)
         for val_fold in range(0, 10):
             train_accuracy, val_accuracy = [], []
             model = build_model()
@@ -205,7 +215,7 @@ def train():
                 train_accuracy.append(train_acc)
                 val_accuracy.append(val_acc)
                 if (epoch+1) % 5 == 0:
-                    visualize(train_accuracy, val_accuracy, title = 'Fold{0}_FixLen{1}_Inceptionv3_GRU{2}_bs{3}'.format(\
+                    visualize(train_accuracy, val_accuracy, title = 'Fold{0}_FixLen{1}_VGG16_GRU{2}_bs{3}'.format(\
                     val_fold, CONF.fixed_seq_len, CONF.hidden_dim, CONF.batch_size))
             best_result.append(max(val_accuracy))
             print(best_result)
