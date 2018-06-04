@@ -21,7 +21,6 @@ from sklearn import tree
 from sklearn.neural_network import MLPClassifier
 from sklearn.ensemble import BaggingClassifier, AdaBoostClassifier
 from sklearn import metrics
-import xgboost as xgb
 
 from PreProcessing import pickle_2_numpy, pca_reduce, standardrize_input, load_numpy, discretize_input
 
