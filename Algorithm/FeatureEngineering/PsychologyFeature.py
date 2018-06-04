@@ -6,6 +6,7 @@
 import os
 import math
 
+import pickle
 import dlib
 import cv2
 import fire
@@ -106,7 +107,12 @@ def get_curve_feature(coords):
         x, y, z = complex(p1[0], p1[1]), complex(p2[0], p2[1]), complex(p3[0], p3[1]),
         w = z-x
         w /= y-x
-        c = (x-y)*(w-abs(w)**2)/2j/w.imag-x
+        if abs(w.imag-x) < 1e-5:
+            return 0
+        try:
+            c = (x-y)*(w-abs(w)**2)/(2j*(w.imag-x))
+        except Exception:
+            print(w.imag-x)
         center = (c.real, c.imag)
         radius = abs(c+x)
         return 1.0/radius
@@ -135,7 +141,7 @@ def get_curve_feature(coords):
         feature.append(get_circle_curvature(coords[i], coords[i+1], coords[i+2]))
 
     # 嘴巴取三点形成的圆的曲率
-    for i, j, k in ((48, 59, 58), (59, 58, 57), (58, 57, 56), (57, 56, 55), (56, 55, 54), (61, 62, 63), (65, 66, 67)):
+    for i, j, k in ((48, 59, 58), (59, 58, 57), (58, 57, 56), (57, 56, 55), (56, 55, 54), (61, 62, 63), (65, 66, 67), (48, 49, 50), (52, 53, 54)):
         feature.append(get_circle_curvature(coords[i], coords[j], coords[k]))
     return feature
 
@@ -217,20 +223,20 @@ def get_wrinkle_feature(img_path):
     feature = []
     m, n = processed_image.shape
     feature.append(wrinkle_prop(processed_image))
-    feature.append(connected_blocks(processed_image.tolist(), m, n))
+    #feature.append(connected_blocks(processed_image.tolist(), m, n))
     return feature
 
 
-def genrate_data():
+def generate_data():
     img_dir = 'E:/FaceExpression/TrainSet/CK+/10_fold_original/'
     X, Y = [], []
     for i in range(1, 11):
         fold_dir = img_dir + 'g{0}/'.format(i)
         fold_x, fold_y = [], []
         for sample in os.listdir(fold_dir):
-            label = int(sample.split('_')[0])
-            sample_path = img_dir + '{0}/'.format(sample)
-            img_path = sorted(os.listdir(sample_path))[-1]
+            label = int(sample.split('_')[0]) - 1
+            sample_path = fold_dir + '{0}/'.format(sample)
+            img_path = sample_path + sorted(os.listdir(sample_path))[-1]
             coords = detect_landmarks(img_path)
             face_size = face_total_distance(coords)
             feature = get_eye_feature(coords)
@@ -243,7 +249,8 @@ def genrate_data():
             fold_y.append(label)
         X.append(fold_x)
         Y.append(fold_y)
-    return X, Y
+    pickle.dump([X, Y], './psychology_feature.pkl')
+    print('====================finish dumping data======================')
 
 if __name__ == '__main__':
     fire.Fire()
