@@ -132,8 +132,8 @@ def get_curve_feature(coords):
         feature.append(get_circle_curvature(coords[i], coords[j], coords[k]))
     
     # 鼻子取三点形成的圆的曲率
-    # for i in range(31, 34):
-    #    feature.append(get_circle_curvature(coords[i], coords[i+1], coords[i+2]))
+    for i in range(31, 34):
+       feature.append(get_circle_curvature(coords[i], coords[i+1], coords[i+2]))
     feature.append(get_circle_curvature(coords[31], coords[33], coords[35]))
     
     # 脸颊取三点形成的圆的曲率
@@ -229,6 +229,7 @@ def get_wrinkle_feature(img_path):
 
 def generate_data():
     img_dir = 'E:/FaceExpression/TrainSet/CK+/10_fold_original/'
+    pkl_file = './psychology_feature.pkl'
     X, Y = [], []
     for i in range(1, 11):
         fold_dir = img_dir + 'g{0}/'.format(i)
@@ -242,14 +243,15 @@ def generate_data():
             feature = get_eye_feature(coords)
             feature += get_mouth_feature(coords)
             feature += get_cheek_feature(coords)
-            # normalized_feature = [val/face_size for val in feature]
+            #feature = [val/face_size for val in feature]
             feature += get_curve_feature(coords)
             feature += get_wrinkle_feature(img_path)
             fold_x.append(feature)
             fold_y.append(label)
         X.append(fold_x)
         Y.append(fold_y)
-    pickle.dump([X, Y], './psychology_feature.pkl')
+    with open(pkl_file, mode='wb') as wf:
+        pickle.dump([X, Y], wf)
     print('====================finish dumping data======================')
 
 if __name__ == '__main__':
