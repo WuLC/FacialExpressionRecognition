@@ -4,13 +4,14 @@
 # EMail: liangchaowu5@gmail.com
 
 import time
+import pickle
 import logging
 
 import lightgbm as lgb
 import numpy as np
 from sklearn import metrics
-
-from PsychologyFeature import genrate_data
+from sklearn import linear_model
+from sklearn.ensemble import GradientBoostingClassifier
 
 class LGBClassifier():
     def __init__(self):
@@ -18,20 +19,18 @@ class LGBClassifier():
         self.early_stopping_rounds = 15
         self.params = {
             'task': 'train',
-            'boosting_type': 'dart',
+            'boosting_type': 'gbdt',
             'objective': 'multiclass',
             'num_class': 7,
             'metric': {'multi_logloss', 'multi_error'},
-            # 'num_leaves': 80,
-            # 'learning_rate': 0.05,
-            # 'scale_pos_weight': 1.5,
+            'metric_freq':1,
+            'learning_rate': 0.05,
+            # 'is_training_metric': True,
             # 'feature_fraction': 0.5,
             # 'bagging_fraction': 1,
             # 'bagging_freq': 5,
-            # 'max_bin': 300,
-            # 'is_unbalance': True,
-            # 'lambda_l2': 5.0,
-            # 'verbose' : -1
+            # 'max_bin': 255,
+            # 'num_leaves': 31
             }
         
     def fit(self, x_train, y_train, x_val, y_val):
@@ -41,7 +40,6 @@ class LGBClassifier():
         self.model = lgb.train(self.params, 
                           lgbtrain,
                           valid_sets = lgbval,
-                          verbose_eval = self.num_boost_round,
                           num_boost_round = self.num_boost_round,
                           early_stopping_rounds = self.early_stopping_rounds)
     
@@ -59,7 +57,11 @@ def cross_validation(X, Y, logfile = None):
     y_predict = []
     cross_val_score = []
     for i in range(len(Y)):
-        model = LGBClassifier()
+        print('='*10+'fold {0}'.format(i+1))
+        model = linear_model.LogisticRegression(penalty = 'l1', n_jobs = 4)
+        # model = GradientBoostingClassifier()
+        # model = linear_model.SGDClassifier()
+        # model = LGBClassifier()
         train_X, train_Y= [], []
         test_X, test_Y = None, None
         for j in range(len(Y)):
@@ -70,7 +72,9 @@ def cross_validation(X, Y, logfile = None):
                 train_Y.append(Y[j])
         train_X = np.concatenate(train_X, axis = 0)
         train_Y = np.concatenate(train_Y)
-        model.fit(train_X, train_Y, test_X, test_Y)
+        print(train_X.shape, train_Y.shape)
+        print(test_X.shape, test_Y.shape)
+        model.fit(train_X, train_Y)
         prediction = model.predict(test_X)
         y_predict.append(prediction)
         cross_val_score.append(float('{:.3f}'.format(metrics.accuracy_score(prediction, test_Y))))
@@ -84,8 +88,11 @@ def cross_validation(X, Y, logfile = None):
 
 
 def main():
-    X, Y = genrate_data()
-    cross_validation(X, Y, logfile='../logs/PsychologyFeature+GBDT.log')
+    pkl_file = './normalized_psychology_feature.pkl'
+    pkl_file = './psychology_feature.pkl'
+    with open(pkl_file, mode='rb') as rf:
+        X, Y = pickle.load(rf)
+    cross_validation(X, Y, logfile='../logs/PsychologyFeature+LGB.log')
 
 if __name__ == '__main__':
     main()
