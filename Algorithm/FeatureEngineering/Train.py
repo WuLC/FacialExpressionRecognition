@@ -56,12 +56,12 @@ def cross_validation(X, Y, logfile = None):
     start_time = time.time()
     y_predict = []
     cross_val_score = []
+    feature_importance = 0
     for i in range(len(Y)):
         print('='*10+'fold {0}'.format(i+1))
         model = linear_model.LogisticRegression(penalty = 'l1', n_jobs = 4)
         # model = GradientBoostingClassifier()
         # model = linear_model.SGDClassifier()
-        # model = LGBClassifier()
         train_X, train_Y= [], []
         test_X, test_Y = None, None
         for j in range(len(Y)):
@@ -75,9 +75,13 @@ def cross_validation(X, Y, logfile = None):
         print(train_X.shape, train_Y.shape)
         print(test_X.shape, test_Y.shape)
         model.fit(train_X, train_Y)
+        coefs = model.coef_[0]
+        coef_sum = sum(abs(val) for val in coefs)
+        feature_importance += abs(coefs[-1]*1.0/coef_sum)
         prediction = model.predict(test_X)
         y_predict.append(prediction)
         cross_val_score.append(float('{:.3f}'.format(metrics.accuracy_score(prediction, test_Y))))
+    print('feature importance: {0}'.format(feature_importance/10))
     y_predict = np.concatenate(y_predict)
     y_true = np.concatenate(Y)
     logging.info('training model description \n {0}'.format(model))
