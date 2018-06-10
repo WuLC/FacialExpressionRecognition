@@ -23,36 +23,40 @@ from keras.applications.inception_v3 import InceptionV3
 from keras.applications.resnet50 import ResNet50
 from keras.applications.densenet import DenseNet121
 from keras.models import Sequential, Model
-from keras.layers import Input, TimeDistributed, Flatten, GRU, Dense, Dropout, LSTM, Bidirectional
+from keras.layers import Input, TimeDistributed, Flatten, GRU, Dense, Dropout, LSTM, Bidirectional, ConvLSTM2D
 from keras import optimizers
 from keras import backend as K
 
 
 class Configuration:
     def __init__(self):
-        self.dataset = 'CKPlus'
-        self.data_dir = 'E:/FaceExpression/TrainSet/CK+/10_fold/'
+        mapping = { 'CKPlus': 'E:/FaceExpression/TrainSet/CK+/10_fold/',
+                    'Oulu': 'E:/FaceExpression/TrainSet/Oulu/10_fold/',
+                    'MMI': 'E:/FaceExpression/TrainSet/MMI/10_fold/'
+                  }
+        self.dataset = 'Oulu'
+        self.data_dir = mapping[self.dataset]
         self.vis = visdom.Visdom(env = self.dataset)
 
         # input and output
-        self.categories = 7
+        self.categories = 6
         self.fix_input_len = True
         self.fixed_seq_len = 5
         self.img_size = (224, 224, 3)
         self.input_size = (None, 224, 224, 3) # (seq_len, width, height, channel)
         
         # training
-        self.batch_size = 15
-        self.epochs = 50
-        # self.optimizer = optimizers.SGD(lr=0.01, momentum=0.9, clipnorm=1., clipvalue=0.5)
+        self.batch_size = 6
+        self.epochs = 100
 
         # RNN parameters
-        self.hidden_dim = 512
+        self.hidden_dim = 1024
 
         # mean and std of dataset
-        self.standardize = True
+        self.feature_wise_standardize = True
         self.mean = None
         self.std = None
+        self.sample_wise_standardize = False
 
 
 CONF = Configuration()
@@ -61,23 +65,27 @@ CONF = Configuration()
 def build_model():
     pretrained_cnn = VGG16(weights='imagenet', include_top=False)
     # pretrained_cnn.trainable = False
-    for layer in pretrained_cnn.layers[:-4]: # keep some layers non-trainable (weights will not be updated)
+    for layer in pretrained_cnn.layers[:-3]: # keep some layers non-trainable (weights will not be updated)
         layer.trainable = False
     input = Input(shape = CONF.img_size)
     x = pretrained_cnn(input)
-    x = Flatten()(x)
-    x = Dense(2048)(x)
-    x = Dropout(0.5)(x)
+    # x = Flatten()(x)
+    # x = Dense(2048)(x)
+    # x = Dropout(0.5)(x)
     pretrained_cnn = Model(inputs = input, outputs = x)
 
     input_shape = CONF.input_size
     model = Sequential()
     model.add(TimeDistributed(pretrained_cnn, input_shape=input_shape))
     # model.add(Bidirectional(GRU(1024, kernel_initializer='orthogonal', bias_initializer='ones', dropout=0.5, recurrent_dropout=0.5)))
-    model.add(GRU(CONF.hidden_dim, kernel_initializer='orthogonal', bias_initializer='ones', dropout=0.5, recurrent_dropout=0.5, return_sequences=False))
+    # model.add(GRU(CONF.hidden_dim, kernel_initializer='orthogonal', bias_initializer='ones', dropout=0.5, recurrent_dropout=0.5, return_sequences=True))
+    model.add(ConvLSTM2D(filters=16, kernel_size = 2, strides=(2,2), kernel_initializer='orthogonal', recurrent_initializer='orthogonal', bias_initializer='ones',
+                         dropout=0.2, recurrent_dropout=0.2, return_sequences=False))
+    model.add(Flatten())
+    model.add(Dropout(0.5))
     model.add(Dense(CONF.categories, activation = 'softmax'))
     model.compile(loss='categorical_crossentropy',
-                 optimizer = optimizers.SGD(lr=0.01, momentum=0.9, clipnorm=1., clipvalue=0.5), # CONF.optimizer,
+                 optimizer = optimizers.SGD(lr=0.001, momentum=0.9, clipnorm=1., clipvalue=0.5),
                  metrics=['accuracy'])
     return model
 
@@ -98,8 +106,12 @@ def load_sample(img_dir):
         img_path = img_dir + img_name
         img = image.load_img(img_path, target_size=(224, 224))
         x = image.img_to_array(img)
-        if CONF.standardize and not (CONF.mean is None and CONF.std is None):
+        # feature-wise standardization
+        if CONF.feature_wise_standardize and not (CONF.mean is None and CONF.std is None):
             x = (x-CONF.mean)/CONF.std
+        # sample-wise standardization
+        if CONF.sample_wise_standardize:
+            x = (x-np.mean(x))/np.std(x)
         imgs.append(x)
     imgs = np.array(imgs)
     label = np_utils.to_categorical(label, num_classes= CONF.categories)
@@ -186,8 +198,10 @@ def visualize(train_accuracy, val_accuracy, title='default'):
 
 def train():
     global CONF
-    CONF.mean, CONF.std = load_dataset_mean_std(CONF.data_dir)
-    print(CONF.mean.shape, CONF.std.shape)
+    if CONF.feature_wise_standardize:
+        print('============Perform feature-wise standardization==================')
+        CONF.mean, CONF.std = load_dataset_mean_std(CONF.data_dir)
+        print(CONF.mean.shape, CONF.std.shape)
     start_time = time.time()
     best_result = []
     val_fold = 1
@@ -221,9 +235,9 @@ def train():
             print(best_result)
             # release the memory of GPU taken by the model of last fold
             K.clear_session()
-            gc.collect() 
+            gc.collect()
     else:
-        dataset = load_var_len_dataset(data_dir)
+        dataset = load_var_len_dataset(CONF.data_dir)
         # 10-fold cross validation for input data with variable length
         for val_fold in range(0, 10):
             train_accuracy, val_accuracy = [], []
