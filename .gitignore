@@ -7,7 +7,6 @@ System/models/model_weights/
 System/detected_records/
 System/test_imgs/
 System/crop_imgs*/
-System/test_src/
 System/Euler/
 System/DataCollection/images/
 System/FaceRecognition/known/
@@ -15,5 +14,7 @@ System/FaceRecognition/dlib_models/
 .vscode/
 *.pyc
 *.json
+*.pkl
 System/DataCollection/002.jpg
 System/DataCollection/001.jpg
+DeeplearningMethods/logs
