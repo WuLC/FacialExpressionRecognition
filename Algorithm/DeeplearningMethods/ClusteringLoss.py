@@ -15,7 +15,7 @@ from keras.applications.mobilenet import MobileNet
 from keras.models import Sequential
 from keras.preprocessing import image
 from keras.utils import np_utils
-from keras.layers import Input, Flatten, Dense, Dropout
+from keras.layers import Embedding, Input, Flatten, Dense, Dropout, Lambda
 from keras.models import Model
 from keras import backend as K
 from keras.optimizers import SGD
@@ -25,83 +25,112 @@ from keras.optimizers import SGD
 height, width = 224, 224
 feature_dim = 2048
 categories = 7
-batch_size = 32
-epochs = 10
-model_base_path = './models/CK+_aug_VGG16_fine_tunning_epoch({0})_'.format(epochs)
-top_model_base_path =  './models/CK+_bottleneck_fc_model_'
-logfile = './logs/CK+_aug_CustomModels.log'
+batch_size = 16
+epochs = 20
+model_base_path = '../models/CK+_VGG16_fine_tunning_epoch({0})_'.format(epochs)
+top_model_base_path =  '../models/CK+_bottleneck_fc_model_'
+logfile = '../logs/CK+_ClusteringLoss.log'
 logging.basicConfig(level=logging.DEBUG, filename=logfile, filemode="a+", format="%(asctime)-15s %(levelname)-8s  %(message)s")
-
 
 
 ######################### cross validation ##################################
 # load and reshape data firstly
 feature_pkl_file = '../Datasets/CK+/pkl/unified_10g.pkl'
-
+feature_pkl_file = '../Datasets/CK+/pkl/original_10g.pkl'
 with open(feature_pkl_file, 'rb') as rf:
     X, Y = pickle.load(rf)
-
+    Y_value = Y[:]
 for i in range(len(Y)):
     Y[i] = np_utils.to_categorical(Y[i], categories)
 
+useClusteringLoss = True
+# load pretrained model
+initial_model = VGG16(weights='imagenet', include_top=False)
+print('Model loaded.')
+for layer in initial_model.layers[:-5]: # keep some layers non-trainable (weights will not be updated)
+    layer.trainable = False
+
+input = Input(shape=(height, width, 3),name = 'image_input')
+tmp = initial_model(input)
+tmp = Flatten()(tmp)
+tmp = Dense(256, activation='relu')(tmp)
+# tmp = Dropout(0.5)(tmp)
+predictions = Dense(categories, activation = 'softmax')(tmp)
+
+if not useClusteringLoss:
+    model = Model(input, predictions)
+    model.compile(loss='categorical_crossentropy',
+            optimizer = SGD(lr=0.0001, momentum=0.9),
+            metrics=['accuracy'])
+else:
+    print('=====use clustering loss=====')
+    lambda_inner, lambda_outer = 0.00000000002, -0.000002
+    Centers = Embedding(categories, 256)
+
+    # inner loss
+    input_target = Input(shape=(1,)) # single value ground truth labels as inputs
+    center = Centers(input_target)
+    inner_loss = Lambda(lambda x: K.sum(K.square(x[0]-x[1][:,0]), 1, keepdims=True),name='inner_loss')([tmp, center])
+    # print('*******************', center.shape, ip1.shape, inner_loss.shape, K.square(ip1 - center[:,0]).shape)
+
+    # outer loss
+    input_other = Input(shape=(categories - 1, ))
+    other_centers = Centers(input_other)
+    outer_loss = Lambda(lambda x : K.sum(K.square(x[0][:, 0] - x[1]), axis = 1, keepdims=True), name='outer_loss')([other_centers, tmp])
+    # print('*******************', other_centers.shape, ip1.shape, outer_loss.shape, (other_centers - ip1).shape)
+
+    # build model
+    model = Model(inputs=[input, input_target], outputs=[predictions, inner_loss])
+    model.compile(optimizer=SGD(lr=0.0001, momentum=0.9), 
+                  loss=["categorical_crossentropy", lambda y_true, y_pred: y_pred], 
+                  loss_weights=[1, lambda_inner], 
+                  metrics=['accuracy'])
+
+# train and evaluate
 cv_score = []
-extracted_features = []
 start_time = time.time()
 for i in range(len(Y)):
     print('==========={0} fold=============='.format(i))
-    model_path = model_base_path + '{0}.h5'.format(i)
-    
-    # pretrained VGG16 + pretrained top layer model 
-    # build a classifier model to put on top of the convolutional model
-    top_model = Sequential()
-    top_model.add(Flatten(input_shape = (7, 7, 512)))
-    top_model.add(Dense(256, activation='relu'))
-    top_model.add(Dropout(0.5))
-    top_model.add(Dense(categories, activation='softmax'))
-    top_model_weights_path = top_model_base_path + '{0}.h5'.format(i)
-    top_model.load_weights(top_model_weights_path)
-
-    # load pretrained model and add the top model
-    initial_model = VGG16(weights='imagenet', include_top=False)
-    print('Model loaded.')
-    for layer in initial_model.layers[:-5]: # keep some layers non-trainable (weights will not be updated)
-        layer.trainable = False
-
-    input = Input(shape=(height, width, 3),name = 'image_input')
-    output = initial_model(input)
-    x = Flatten()(output)
-    x = Dense(256, activation='relu')(x)
-    x = Dropout(0.5)(x)
-    predictions = Dense(categories, activation = 'softmax')(x)
-    model = Model(input, predictions)
-    
-    # load top model weights
-    layers_num = len(top_model.layers)
-    for k in range(layers_num):
-        model.layers[k - layers_num].set_weights(top_model.layers[k].get_weights())
-    
-    model.compile(loss='categorical_crossentropy',
-              optimizer = SGD(lr=0.0001, momentum=0.9),
-              metrics=['accuracy'])
-
     X_train, Y_train = [], []
+    Y_train_value, Y_test_value = [], []
     for j in range(len(Y)):
         if i == j:
             X_test = X[i]
             Y_test = Y[i]
+            Y_test_value.append(Y_value[i])
         else:
             X_train.append(X[j])
             Y_train.append(Y[j])
+            Y_train_value.append(Y_value[j])
     X_train = np.concatenate(X_train, axis = 0)
     Y_train = np.concatenate(Y_train, axis = 0)
+    Y_test_value = np.concatenate(Y_test_value, axis = 0)
+    Y_train_value = np.concatenate(Y_train_value, axis = 0)
+    print('=============shape of data==============')
+    print(X_train.shape, Y_train.shape, Y_test_value.shape, Y_train_value.shape)
 
-    model.fit(X_train, Y_train, batch_size = batch_size, epochs = epochs, validation_data = (X_test, Y_test), verbose = 2)
-    score = model.evaluate(X_test, Y_test, batch_size = batch_size, verbose=0)
-    cv_score.append(score[1])
-    print('**************validation accuracy of fold {0}:{1}******************'.format(i+1, score[1]))
+    if not useClusteringLoss:
+        model.fit(X_train, Y_train, batch_size = batch_size, epochs = epochs, validation_data = (X_test, Y_test), verbose = 2)
+        score = model.evaluate(X_test, Y_test, batch_size = batch_size, verbose=0)
+        cv_score.append(score[1])
+    else:
+        random_y_train = np.random.rand(X_train.shape[0],1)
+        random_y_test = np.random.rand(X_test.shape[0],1)
+        
+        model.fit([X_train, Y_train_value],
+                  [Y_train, random_y_train], 
+                  batch_size = batch_size, 
+                  epochs = epochs,
+                  verbose = 1, 
+                  validation_data = ([X_test, Y_test_value], [Y_test, random_y_test])
+                  )
+        score = model.evaluate([X_test, Y_test_value], [Y_test, random_y_test], batch_size = batch_size, verbose=0)
+        print(score)
+        cv_score.append(score[3])
+    print('**************validation accuracy of fold {0}:{1}******************'.format(i+1, cv_score[-1]))
     print('**************curr average accuracy {0}******************'.format(np.mean(cv_score)))
     # release the memory of GPU taken by the model 
-    K.clear_session()
+    # K.clear_session()
 
 logging.info('model layers \n {0}'.format(model.summary()))
 logging.info('time consuming:{0}s'.format(time.time() - start_time))
