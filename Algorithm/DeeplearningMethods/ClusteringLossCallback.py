@@ -8,6 +8,9 @@ import numpy as np
 
 class Evaluation(keras.callbacks.Callback):
 
+    def __init__(self, use_clustering_loss):
+        self.use_clustering_loss = use_clustering_loss
+
     def on_train_begin(self, logs={}):
         self.aucs = []
         self.losses = []
@@ -16,7 +19,7 @@ class Evaluation(keras.callbacks.Callback):
         return
 
     def on_epoch_begin(self, epoch, logs={}):
-        print(self.validation_data[0].shape, self.validation_data[1].shape, self.validation_data[2].shape)
+        print(self.validation_data[0].shape, self.validation_data[1].shape)
         print(self.model.input[0].shape)
 
     def on_epoch_end(self, epoch, logs={}):
@@ -27,14 +30,17 @@ class Evaluation(keras.callbacks.Callback):
         print(self.validation_data[1].shape)
         print('=========')
 
-        input = self.model.input[0]
-        labels = self.validation_data[1].flatten() # already are single value ground truth labels
+        input = self.model.input[0] if self.use_clustering_loss else self.model.input
         feature_layer_model = Model(inputs=input, outputs=self.model.get_layer('feature').output)
-        feature_output = feature_layer_model.predict(self.model.input[0])
+        feature_output = feature_layer_model.predict(self.validation_data[0])
         
         print(feature_output.shape)
         scaled_feature = scaledown(feature_output)
         print(scaled_feature.shape)
+        if self.use_clustering_loss:
+            labels = self.validation_data[1].flatten() # already are single value ground truth labels
+        else:
+            labels = np.argmax(self.validation_data[1],axis=1)
         visualize(scaled_feature, labels, epoch)
         
         return
