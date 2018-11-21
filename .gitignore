@@ -17,4 +17,4 @@ System/FaceRecognition/dlib_models/
 *.pkl
 System/DataCollection/002.jpg
 System/DataCollection/001.jpg
-DeeplearningMethods/logs
+images/
