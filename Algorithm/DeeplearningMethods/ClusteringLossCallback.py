@@ -28,22 +28,26 @@ class Evaluation(keras.callbacks.Callback):
         print(len(self.validation_data)) #be careful of the dimenstion of the self.validation_data, somehow some extra dim will be included
         print(self.validation_data[0].shape)
         print(self.validation_data[1].shape)
-        print('=========')
-
+        
         input = self.model.input[0] if self.use_clustering_loss else self.model.input
         feature_layer_model = Model(inputs=input, outputs=self.model.get_layer('feature').output)
         feature_output = feature_layer_model.predict(self.validation_data[0])
         
-        print(feature_output.shape)
-        scaled_feature = TSNE(n_components=2).fit_transform(feature_output)
-        print(scaled_feature.shape)
+
+        if feature_output.shape[1] != 2:
+            print('perform tSEN for diemension reduction')
+            scaled_feature = TSNE(n_components=2).fit_transform(feature_output)
+        else:
+            scaled_feature = feature_output
 
         if self.use_clustering_loss:
             labels = self.validation_data[1].flatten() # already are single value ground truth labels
         else:
             labels = np.argmax(self.validation_data[1],axis=1)
-        visualize(scaled_feature, labels, epoch)
         
+        print('shape of scaled feature', scaled_feature.shape)
+        visualize(scaled_feature, labels, epoch)
+        print('=========')
         return
 
     def on_batch_begin(self, batch, logs={}):
@@ -61,7 +65,7 @@ def visualize(feat, labels, epoch):
     plt.clf()
     for i in range(7):
         plt.plot(feat[labels == i, 0], feat[labels == i, 1], '.', c=c[i])
-    plt.legend(['angry', '1', '2', '3', '4', '5', '6'], loc = 'upper right')
+    # plt.legend(['angry', 'contempt', 'disgust', 'fear', 'happy', 'sadness', 'surprise'])
     XMax = np.max(feat[:,0]) 
     XMin = np.min(feat[:,1])
     YMax = np.max(feat[:,0])
