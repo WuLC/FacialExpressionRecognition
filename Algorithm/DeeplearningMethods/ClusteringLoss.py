@@ -7,11 +7,11 @@ import numpy as np
 import logging
 
 from keras.applications.vgg16 import VGG16
-from keras.applications.vgg19 import VGG19
-from keras.applications.inception_v3 import InceptionV3
-from keras.applications.resnet50 import ResNet50
-from keras.applications.xception import Xception
-from keras.applications.mobilenet import MobileNet
+# from keras.applications.vgg19 import VGG19
+# from keras.applications.inception_v3 import InceptionV3
+# from keras.applications.resnet50 import ResNet50
+# from keras.applications.xception import Xception
+# from keras.applications.mobilenet import MobileNet
 from keras.models import Sequential
 from keras.preprocessing import image
 from keras.utils import np_utils
@@ -20,6 +20,7 @@ from keras.models import Model
 from keras import backend as K
 from keras.optimizers import SGD
 
+from ClusteringLossCallback import Evaluation
 
 # specify image size, categories, and log file 
 height, width = 224, 224
@@ -34,6 +35,7 @@ logging.basicConfig(level=logging.DEBUG, filename=logfile, filemode="a+", format
 
 
 ######################### cross validation ##################################
+
 # load and reshape data firstly
 feature_pkl_file = '../Datasets/CK+/pkl/unified_10g.pkl'
 feature_pkl_file = '../Datasets/CK+/pkl/original_10g.pkl'
@@ -43,7 +45,9 @@ with open(feature_pkl_file, 'rb') as rf:
 for i in range(len(Y)):
     Y[i] = np_utils.to_categorical(Y[i], categories)
 
-useClusteringLoss = True
+use_clustering_loss = True
+call_back_evaluation = Evaluation()
+
 # load pretrained model
 initial_model = VGG16(weights='imagenet', include_top=False)
 print('Model loaded.')
@@ -53,11 +57,11 @@ for layer in initial_model.layers[:-5]: # keep some layers non-trainable (weight
 input = Input(shape=(height, width, 3),name = 'image_input')
 tmp = initial_model(input)
 tmp = Flatten()(tmp)
-tmp = Dense(256, activation='relu')(tmp)
+tmp = Dense(256, activation='relu', name = 'feature')(tmp)
 # tmp = Dropout(0.5)(tmp)
 predictions = Dense(categories, activation = 'softmax')(tmp)
 
-if not useClusteringLoss:
+if not use_clustering_loss:
     model = Model(input, predictions)
     model.compile(loss='categorical_crossentropy',
             optimizer = SGD(lr=0.0001, momentum=0.9),
@@ -109,8 +113,15 @@ for i in range(len(Y)):
     print('=============shape of data==============')
     print(X_train.shape, Y_train.shape, Y_test_value.shape, Y_train_value.shape)
 
-    if not useClusteringLoss:
-        model.fit(X_train, Y_train, batch_size = batch_size, epochs = epochs, validation_data = (X_test, Y_test), verbose = 2)
+    if not use_clustering_loss:
+        model.fit(X_train, 
+                  Y_train, 
+                  batch_size = batch_size, 
+                  epochs = epochs, 
+                  validation_data = (X_test, Y_test), 
+                  shuffle = True, 
+                  verbose = 2,
+                  callbacks = [call_back_evaluation])
         score = model.evaluate(X_test, Y_test, batch_size = batch_size, verbose=0)
         cv_score.append(score[1])
     else:
@@ -122,7 +133,8 @@ for i in range(len(Y)):
                   batch_size = batch_size, 
                   epochs = epochs,
                   verbose = 1, 
-                  validation_data = ([X_test, Y_test_value], [Y_test, random_y_test])
+                  validation_data = ([X_test, Y_test_value], [Y_test, random_y_test]),
+                  callbacks = [call_back_evaluation]
                   )
         score = model.evaluate([X_test, Y_test_value], [Y_test, random_y_test], batch_size = batch_size, verbose=0)
         print(score)
