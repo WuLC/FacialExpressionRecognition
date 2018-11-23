@@ -24,7 +24,7 @@ from ClusteringLossCallback import Evaluation
 
 # specify image size, categories, and log file 
 height, width = 224, 224
-feature_dim = 2048
+feature_dim = 256
 categories = 7
 batch_size = 16
 epochs = 20
@@ -46,7 +46,7 @@ for i in range(len(Y)):
     Y[i] = np_utils.to_categorical(Y[i], categories)
 
 use_clustering_loss = True
-call_back_evaluation = Evaluation()
+call_back_evaluation = Evaluation(use_clustering_loss)
 
 # load pretrained model
 initial_model = VGG16(weights='imagenet', include_top=False)
@@ -57,7 +57,7 @@ for layer in initial_model.layers[:-5]: # keep some layers non-trainable (weight
 input = Input(shape=(height, width, 3),name = 'image_input')
 tmp = initial_model(input)
 tmp = Flatten()(tmp)
-tmp = Dense(256, activation='relu', name = 'feature')(tmp)
+tmp = Dense(feature_dim, activation='relu', name = 'feature')(tmp)
 # tmp = Dropout(0.5)(tmp)
 predictions = Dense(categories, activation = 'softmax')(tmp)
 
@@ -68,8 +68,8 @@ if not use_clustering_loss:
             metrics=['accuracy'])
 else:
     print('=====use clustering loss=====')
-    lambda_inner, lambda_outer = 0.00000000002, -0.000002
-    Centers = Embedding(categories, 256)
+    lambda_inner, lambda_outer = 0.002, -0.000002
+    Centers = Embedding(categories, feature_dim)
 
     # inner loss
     input_target = Input(shape=(1,)) # single value ground truth labels as inputs
@@ -118,7 +118,8 @@ for i in range(len(Y)):
                   Y_train, 
                   batch_size = batch_size, 
                   epochs = epochs, 
-                  validation_data = (X_test, Y_test), 
+                  validation_data = (X_train, Y_train),
+                  # validation_data = (X_test, Y_test),
                   shuffle = True, 
                   verbose = 2,
                   callbacks = [call_back_evaluation])
@@ -133,7 +134,8 @@ for i in range(len(Y)):
                   batch_size = batch_size, 
                   epochs = epochs,
                   verbose = 1, 
-                  validation_data = ([X_test, Y_test_value], [Y_test, random_y_test]),
+                  # validation_data = ([X_test, Y_test_value], [Y_test, random_y_test]),
+                  validation_data = ([X_train, Y_train_value], [Y_train, random_y_train]),
                   callbacks = [call_back_evaluation]
                   )
         score = model.evaluate([X_test, Y_test_value], [Y_test, random_y_test], batch_size = batch_size, verbose=0)
