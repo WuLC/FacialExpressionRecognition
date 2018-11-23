@@ -42,7 +42,7 @@ def draw_landmarks(img_path):
         # Drawing points on face
         for (x, y) in landmarks:
             cv2.circle(gray_img, (x, y), 2, (255, 0, 0), -1)
-        
+        cv2.circle(gray_img, (100, 200), 10,  (0, 255, 0), -1)
         # for p1, p2 in disgust_mouth:
         #    cv2.line(gray_img, tuple(landmarks[p1]), tuple(landmarks[p2]), (255, 0, 0))
         
