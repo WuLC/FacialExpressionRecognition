@@ -18,3 +18,11 @@ System/FaceRecognition/dlib_models/
 System/DataCollection/002.jpg
 System/DataCollection/001.jpg
 images/
+Algorithm/FeatureEngineering/sample.png
+System/FaceRecognition/face_recognition_api.py
+System/test_src/AzureApi.py
+Algorithm/FeatureEngineering/TexturalFeatures.py
+System/test_src/EmotiBotAPI.py
+System/test_src/Plot.ipynb
+System/test_src/multi_process_test.py
+System/test_src/.ipynb_checkpoints/Plot-checkpoint.ipynb
