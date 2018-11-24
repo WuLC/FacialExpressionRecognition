@@ -1,6 +1,4 @@
 import os 
-os.environ['TF_CPP_MIN_LOG_LEVEL']='2'
-os.environ["CUDA_VISIBLE_DEVICES"]='1'
 import pickle
 import time
 import numpy as np
@@ -21,6 +19,10 @@ from keras import backend as K
 from keras.optimizers import SGD
 
 from ClusteringLossCallback import Evaluation
+
+# set which gpu to use
+os.environ['TF_CPP_MIN_LOG_LEVEL']='2'
+os.environ["CUDA_VISIBLE_DEVICES"]='1'
 
 # specify image size, categories, and log file 
 height, width = 224, 224
@@ -68,7 +70,7 @@ if not use_clustering_loss:
             metrics=['accuracy'])
 else:
     print('=====use clustering loss=====')
-    lambda_inner, lambda_outer = 0.002, -0.000002
+    lambda_inner, lambda_outer = 0.002, -0.00002
     Centers = Embedding(categories, feature_dim)
 
     # inner loss
@@ -84,10 +86,11 @@ else:
     # print('*******************', other_centers.shape, ip1.shape, outer_loss.shape, (other_centers - ip1).shape)
 
     # build model
-    model = Model(inputs=[input, input_target], outputs=[predictions, inner_loss])
+    # model = Model(inputs=[input, input_target], outputs=[predictions, inner_loss])
+    model = Model(inputs=[input, input_target, input_other], outputs=[predictions, inner_loss, outer_loss])
     model.compile(optimizer=SGD(lr=0.0001, momentum=0.9), 
-                  loss=["categorical_crossentropy", lambda y_true, y_pred: y_pred], 
-                  loss_weights=[1, lambda_inner], 
+                  loss=["categorical_crossentropy", lambda y_true, y_pred: y_pred, lambda y_true, y_pred: y_pred], 
+                  loss_weights=[1, lambda_inner, lambda_outer], 
                   metrics=['accuracy'])
 
 # train and evaluate
@@ -106,10 +109,14 @@ for i in range(len(Y)):
             X_train.append(X[j])
             Y_train.append(Y[j])
             Y_train_value.append(Y_value[j])
+    
     X_train = np.concatenate(X_train, axis = 0)
     Y_train = np.concatenate(Y_train, axis = 0)
     Y_test_value = np.concatenate(Y_test_value, axis = 0)
     Y_train_value = np.concatenate(Y_train_value, axis = 0)
+    Y_train_other_value = np.array([[i for i in range(categories) if i != num] for num in Y_train_value])
+    Y_test_other_value = np.array([[i for i in range(categories) if i != num] for num in Y_test_value])
+
     print('=============shape of data==============')
     print(X_train.shape, Y_train.shape, Y_test_value.shape, Y_train_value.shape)
 
@@ -129,13 +136,13 @@ for i in range(len(Y)):
         random_y_train = np.random.rand(X_train.shape[0],1)
         random_y_test = np.random.rand(X_test.shape[0],1)
         
-        model.fit([X_train, Y_train_value],
-                  [Y_train, random_y_train], 
+        model.fit([X_train, Y_train_value, Y_train_other_value],
+                  [Y_train, random_y_train, random_y_train], 
                   batch_size = batch_size, 
                   epochs = epochs,
                   verbose = 1, 
                   # validation_data = ([X_test, Y_test_value], [Y_test, random_y_test]),
-                  validation_data = ([X_train, Y_train_value], [Y_train, random_y_train]),
+                  validation_data = ([X_train, Y_train_value, Y_train_other_value], [Y_train, random_y_train, random_y_train]),
                   callbacks = [call_back_evaluation]
                   )
         score = model.evaluate([X_test, Y_test_value], [Y_test, random_y_test], batch_size = batch_size, verbose=0)
