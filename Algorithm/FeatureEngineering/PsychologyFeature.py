@@ -32,6 +32,25 @@ def detect_landmarks(img_path):
         coords[i] = (landmarks.part(i).x, landmarks.part(i).y)
     return coords
 
+def crop_face_with_landmarks(src_dir, des_dir, target_size = (224, 224)):
+    if not os.path.exists(des_dir):
+        os.makedirs(des_dir)
+    for img_name in os.listdir(src_dir):
+        img_path = src_dir + img_name
+        des_face_path = des_dir + img_name
+        img = cv2.imread(img_path)
+        gray_img = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+        faces = DETECCTOR(gray_img, 1)
+        assert len(faces) == 1, 'detect no face or more than one face in image {0}'.format(img_path)
+        d = faces[0]
+        left, top, right, down = d.left(), d.top(), d.right(), d.bottom()
+        print('detection face: left:{0} top:{1} right:{2} down:{3}'.format(left, top, right, down))
+        landmarks = PREDICTOR(gray_img, d)
+        left_top = (landmarks.part(0).x, min(landmarks.part(19).y, landmarks.part(24).y))
+        right_bottom = (landmarks.part(16).x, landmarks.part(8).y) 
+        cropped_img = gray_img[left_top[1] : right_bottom[1], left_top[0] : right_bottom[0]]
+        resized_img = cv2.resize(cropped_img, target_size)
+        cv2.imwrite(des_face_path, resized_img)
 
 def distance(p1, p2):
     return math.sqrt(pow(p1[0] - p2[0], 2) + pow(p1[1] - p2[1], 2)) 
