@@ -70,7 +70,36 @@ def crop_face_with_landmarks(src_dir, des_dir, target_size = (224, 224)):
         cv2.imwrite(des_face_path, resized_img)
 
 def distance(p1, p2):
-    return math.sqrt(pow(p1[0] - p2[0], 2) + pow(p1[1] - p2[1], 2)) 
+    return pow(p1[0] - p2[0], 2) + pow(p1[1] - p2[1], 2)
+
+def visualize_landmark_change(img_dir):
+    coords = []
+    for img_name in sorted(os.listdir(img_dir)):
+        img_path = img_dir + img_name
+        img = cv2.imread(img_path)
+        gray_img = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+        faces = DETECCTOR(gray_img, 1)
+        assert len(faces) == 1, 'detect no face or more than one face in image {0}'.format(img_path)
+        landmarks = PREDICTOR(gray_img, faces[0])
+        coords.append([(landmarks.part(i).x, landmarks.part(i).y) for i in range(0, 68)])
+    
+    # calculate changes, scale and visualize
+    diff = []
+    min_val, max_val = 10**9, 0
+    for i in range(1, len(coords)):
+        curr = []
+        for j in range(len(coords[i])):
+            d = distance(coords[i-1][j], coords[i][j])
+            curr.append(d)
+            min_val, max_val = min(min_val, d), max(max_val, d)
+        diff.append(curr)
+
+    # scale to 0~255
+    for i in range(len(diff)):
+        for j in range(len(diff[i])):
+            diff[i][j] = int(255.0*(diff[i][j] - min_val)/(max_val - min_val))
+    img = np.array(diff)
+    cv2.imwrite(img_dir + 'landmark_diff.png', img)
 
 
 def face_total_distance(coords):
