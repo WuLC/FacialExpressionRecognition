@@ -3,6 +3,8 @@
 # Author: WuLC
 # EMail: liangchaowu5@gmail.com
 
+from __future__ import division
+
 import os
 import math
 
@@ -72,7 +74,7 @@ def crop_face_with_landmarks(src_dir, des_dir, target_size = (224, 224)):
 def distance(p1, p2):
     return pow(p1[0] - p2[0], 2) + pow(p1[1] - p2[1], 2)
 
-def visualize_landmark_change(img_dir):
+def visualize_landmark_change(img_dir, n = 20):
     coords = []
     for img_name in sorted(os.listdir(img_dir)):
         img_path = img_dir + img_name
@@ -89,9 +91,20 @@ def visualize_landmark_change(img_dir):
     for i in range(1, len(coords)):
         curr = []
         for j in range(len(coords[i])):
-            d = distance(coords[i-1][j], coords[i][j])
-            curr.append(d)
-            min_val, max_val = min(min_val, d), max(max_val, d)
+            delta_x = coords[i][j][0] - coords[i-1][j][0]
+            delta_y = coords[i][j][1] - coords[i-1][j][1]
+            distance = delta_x**2 + delta_y**2
+            d = math.sqrt(distance)
+            tmp = [0] * n
+            if d > 0:
+                radian = math.acos(delta_y/d)
+                if delta_x < 0:
+                    radian = 2 * math.pi - radian
+                idx = (int((radian - math.pi/n) / (2*math.pi/n)) + 1) % n
+                assert 0 <= idx < n, "area not legal"
+                tmp[idx] = distance
+            curr += tmp
+            min_val, max_val = min(min_val, distance), max(max_val, distance)
         diff.append(curr)
 
     # scale to 0~255
