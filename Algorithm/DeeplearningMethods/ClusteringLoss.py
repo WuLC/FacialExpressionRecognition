@@ -49,6 +49,7 @@ for i in range(len(Y)):
     Y[i] = np_utils.to_categorical(Y[i], categories)
 
 use_clustering_loss = True
+use_pretrained_embedding = True
 call_back_evaluation = Evaluation(use_clustering_loss)
 
 # load pretrained model
@@ -71,9 +72,31 @@ if not use_clustering_loss:
             metrics=['accuracy'])
 else:
     print('=====use clustering loss=====')
-    lambda_inner, lambda_outer = 0.02, 0
-    Centers = Embedding(categories, feature_dim)
-
+    # pretrained embedding matrix
+    if use_pretrained_embedding:
+        pretrained_embedding = './pretrained_embedding.npy'
+        if not os.path.exists(pretrained_embedding):
+            model = Model(input, tmp)
+            func = K.function([model.input, K.learning_phase()], [model.layers[-1].output])
+            count, record = {}, {}
+            for x, y in zip(X, Y_value):
+                output = func([x, 1.0])
+                for i in range(len(y)):
+                    if y[i] not in count:
+                        count[y[i]] = 1
+                        record[y[i]] = np.array(output[0][i])
+                    else:
+                        count[y[i]] += 1
+                        record[y[i]] += np.array(output[0][i])
+            embedding = []
+            for i in range(categories):
+                embedding.append(record[i]/count[i])
+            np.save(pretrained_embedding, np.array(embedding))
+        Centers = Embedding(categories, feature_dim, weights = [np.load(pretrained_embedding)])
+    else:
+        Centers = Embedding(categories, feature_dim)
+    
+    lambda_inner, lambda_outer = 0.0002, 0
     # inner loss
     input_target = Input(shape=(1,)) # single value ground truth labels as inputs
     center = Centers(input_target)
