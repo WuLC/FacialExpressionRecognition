@@ -35,6 +35,9 @@ top_model_base_path =  '../models/CK+_bottleneck_fc_model_'
 logfile = '../logs/CK+_ClusteringLoss.log'
 logging.basicConfig(level=logging.DEBUG, filename=logfile, filemode="a+", format="%(asctime)-15s %(levelname)-8s  %(message)s")
 
+use_clustering_loss = True
+use_pretrained_embedding = True
+call_back_evaluation = Evaluation(use_clustering_loss)
 
 ######################### cross validation ##################################
 
@@ -47,10 +50,6 @@ with open(feature_pkl_file, 'rb') as rf:
     Y_value = Y[:]
 for i in range(len(Y)):
     Y[i] = np_utils.to_categorical(Y[i], categories)
-
-use_clustering_loss = True
-use_pretrained_embedding = True
-call_back_evaluation = Evaluation(use_clustering_loss)
 
 # load pretrained model
 initial_model = VGG16(weights='imagenet', include_top=False)
@@ -96,33 +95,32 @@ else:
     else:
         Centers = Embedding(categories, feature_dim)
     
-    lambda_inner, lambda_outer = 0.0002, 0
+    lambda_inner, lambda_outer = 0.0005, 0.0000005
     # inner loss
     input_target = Input(shape=(1,)) # single value ground truth labels as inputs
     center = Centers(input_target)
-    inner_loss = Lambda(lambda x: K.sum(K.square(x[0]-x[1][:,0]), 1, keepdims=True),name='inner_loss')([tmp, center])
-    # print('*******************', center.shape, ip1.shape, inner_loss.shape, K.square(ip1 - center[:,0]).shape)
+    inner_loss = Lambda(lambda x: K.sum(K.square(x[0]-x[1][:,0]), 1, keepdims=True),name='inner')([tmp, center])
 
     # outer loss
     input_other = Input(shape=(categories - 1, ))
     other_centers = Centers(input_other)
-    outer_loss = Lambda(lambda x : K.sum(K.square(x[0][:, 0] - x[1]), axis = 1, keepdims=True), name='outer_loss')([other_centers, tmp])
-    # print('*******************', other_centers.shape, ip1.shape, outer_loss.shape, (other_centers - ip1).shape)
-
+    # outer_loss = Lambda(lambda x : K.sum(K.square(x[0] - x[1][:,0]), axis = 1, keepdims=True), name='outer_loss')([tmp, other_centers])
+    outer_loss = Lambda(lambda x : K.sum(K.sum(K.square(K.expand_dims(x[0], axis=1) - x[1][:,:]), axis = 1), axis = 1, keepdims=True), name='outer')([tmp, other_centers])
+    
     # build model
     # center loss
-    model = Model(inputs=[input, input_target], outputs=[predictions, inner_loss])
-    model.compile(optimizer=SGD(lr=0.0001, momentum=0.9), 
-                  loss=["categorical_crossentropy", lambda y_true, y_pred: y_pred], 
-                  loss_weights=[1, lambda_inner], 
-                  metrics=['accuracy'])
+    # model = Model(inputs=[input, input_target], outputs=[predictions, inner_loss])
+    # model.compile(optimizer=SGD(lr=0.0001, momentum=0.9), 
+    #               loss=["categorical_crossentropy", lambda y_true, y_pred: y_pred], 
+    #               loss_weights=[1, lambda_inner], 
+    #               metrics=['accuracy'])
 
     # clustering loss
-    # model = Model(inputs=[input, input_target, input_other], outputs=[predictions, inner_loss, outer_loss])
-    # model.compile(optimizer=SGD(lr=0.0001, momentum=0.9), 
-    #               loss=["categorical_crossentropy", lambda y_true, y_pred: y_pred, lambda y_true, y_pred: y_pred], 
-    #               loss_weights=[1, lambda_inner, lambda_outer], 
-    #               metrics=['accuracy'])
+    model = Model(inputs=[input, input_target, input_other], outputs=[predictions, inner_loss, outer_loss])
+    model.compile(optimizer=SGD(lr=0.0001, momentum=0.9), 
+                  loss=["categorical_crossentropy", lambda y_true, y_pred: y_pred, lambda y_true, y_pred: y_pred], 
+                  loss_weights=[1, lambda_inner, lambda_outer], 
+                  metrics=['accuracy'])
 
 # train and evaluate
 cv_score = []
@@ -168,34 +166,34 @@ for i in range(len(Y)):
         random_y_test = np.random.rand(X_test.shape[0],1)
 
         # center loss
-        model.fit([X_train, Y_train_value],
-                  [Y_train, random_y_train], 
-                  batch_size = batch_size, 
-                  epochs = epochs,
-                  verbose = 1, 
-                  # validation_data = ([X_test, Y_test_value], [Y_test, random_y_test]),
-                  validation_data = ([X_train, Y_train_value], [Y_train, random_y_train]),
-                  callbacks = [call_back_evaluation]
-                  )
-        score = model.evaluate([X_train, Y_train_value], 
-                               [Y_train, random_y_train], 
-                               batch_size = batch_size, 
-                               verbose=0)
-        # clustering loss
-        # model.fit([X_train, Y_train_value, Y_train_other_value],
-        #           [Y_train, random_y_train, random_y_train], 
+        # model.fit([X_train, Y_train_value],
+        #           [Y_train, random_y_train],
         #           batch_size = batch_size, 
         #           epochs = epochs,
         #           verbose = 1, 
         #           # validation_data = ([X_test, Y_test_value], [Y_test, random_y_test]),
-        #           validation_data = ([X_train, Y_train_value, Y_train_other_value], [Y_train, random_y_train, random_y_train]),
+        #           validation_data = ([X_train, Y_train_value], [Y_train, random_y_train]),
         #           callbacks = [call_back_evaluation]
         #           )
-        # score = model.evaluate([X_train, Y_train_value, Y_train_other_value], 
-        #                        [Y_train, random_y_train, random_y_train], 
+        # score = model.evaluate([X_train, Y_train_value], 
+        #                        [Y_train, random_y_train], 
         #                        batch_size = batch_size, 
         #                        verbose=0)
-        # cv_score.append(score[3])
+        # clustering loss
+        model.fit([X_train, Y_train_value, Y_train_other_value],
+                  [Y_train, random_y_train, random_y_train], 
+                  batch_size = batch_size, 
+                  epochs = epochs,
+                  verbose = 1, 
+                  # validation_data = ([X_test, Y_test_value], [Y_test, random_y_test]),
+                  validation_data = ([X_train, Y_train_value, Y_train_other_value], [Y_train, random_y_train, random_y_train]),
+                  callbacks = [call_back_evaluation]
+                  )
+        score = model.evaluate([X_train, Y_train_value, Y_train_other_value], 
+                               [Y_train, random_y_train, random_y_train], 
+                               batch_size = batch_size, 
+                               verbose=0)
+        cv_score.append(score[3])
     print('**************validation accuracy of fold {0}:{1}******************'.format(i+1, cv_score[-1]))
     print('**************curr average accuracy {0}******************'.format(np.mean(cv_score)))
     # release the memory of GPU taken by the model 
