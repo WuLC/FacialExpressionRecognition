@@ -13,16 +13,17 @@ from keras.applications.vgg16 import VGG16
 from keras.models import Sequential
 from keras.preprocessing import image
 from keras.utils import np_utils
-from keras.layers import Embedding, Input, Flatten, Dense, Dropout, Lambda
+from keras.layers import Embedding, Input, Flatten, Dense, Dropout, Lambda, Multiply, concatenate
 from keras.models import Model
 from keras import backend as K
 from keras.optimizers import SGD
+import tensorflow as tf
 
 from ClusteringLossCallback import Evaluation
 
 # set which gpu to use
 os.environ['TF_CPP_MIN_LOG_LEVEL']='2'
-os.environ["CUDA_VISIBLE_DEVICES"]='1'
+os.environ["CUDA_VISIBLE_DEVICES"]='2'
 
 # specify image size, categories, and log file 
 height, width = 224, 224
@@ -50,6 +51,13 @@ with open(feature_pkl_file, 'rb') as rf:
     Y_value = Y[:]
 for i in range(len(Y)):
     Y[i] = np_utils.to_categorical(Y[i], categories)
+
+# count the ratio of each category
+count = [0]*categories
+for i in range(len(Y_value)):
+    for j in range(len(Y_value[i])):
+        count[Y_value[i][j]] += 1
+ratio = [num/sum(count) for num in count]
 
 # load pretrained model
 initial_model = VGG16(weights='imagenet', include_top=False)
@@ -95,7 +103,7 @@ else:
     else:
         Centers = Embedding(categories, feature_dim)
     
-    lambda_inner, lambda_outer = 0.0005, 0.0000005
+    lambda_inner, lambda_outer, lambda_var = 0.005, -0.000005, -0.003
     # inner loss
     input_target = Input(shape=(1,)) # single value ground truth labels as inputs
     center = Centers(input_target)
@@ -107,6 +115,24 @@ else:
     # outer_loss = Lambda(lambda x : K.sum(K.square(x[0] - x[1][:,0]), axis = 1, keepdims=True), name='outer_loss')([tmp, other_centers])
     outer_loss = Lambda(lambda x : K.sum(K.sum(K.square(K.expand_dims(x[0], axis=1) - x[1][:,:]), axis = 1), axis = 1, keepdims=True), name='outer')([tmp, other_centers])
     
+    # outer variance loss
+    # eye_embedding = Embedding(categories, categories, weights = [np.eye(categories)], trainable = False)
+    # indices = eye_embedding(input_target)
+    # ratio = Lambda(lambda x: K.reshape(K.sum(x, axis = 1)/K.sum(x), shape=(-1, 1)))(indices)
+    # eye = np.eye(categories)
+    # constant = tf.convert_to_tensor([K.constant(eye[i]) for i in range(categories)])
+    # def my_fnt(x = [indices, constant, tmp]):
+    #     ch = [K.reshape(K.sum(Multiply()([x[0][:,0], K.expand_dims(x[1][i], axis=0)]), axis = 1), shape=(1, -1)) for i in range(categories)]
+    #     return concatenate(inputs = [K.dot(c, x[2])/K.sum(c) for c in ch], axis=0)
+    # ave = Lambda(my_fnt)([indices, constant, tmp])
+    # var_loss = Lambda(lambda x: K.sum(Multiply()([x[0], K.sum(K.square(x[1] - K.mean(x[2], axis=0, keepdims=True)), axis = 1)]), axis = 0))([ratio, ave, tmp])
+    
+    r = tf.convert_to_tensor(ratio)
+    input_all = Input(shape=(categories, ))
+    all_ave = Centers(input_all)
+    var_loss = Lambda(lambda x : K.sum(K.sum(K.square((x - K.mean(x, axis=1, keepdims=True))), axis=2) * r, axis=1, keepdims=True), name='var')(all_ave)
+
+
     # build model
     # center loss
     # model = Model(inputs=[input, input_target], outputs=[predictions, inner_loss])
@@ -116,10 +142,10 @@ else:
     #               metrics=['accuracy'])
 
     # clustering loss
-    model = Model(inputs=[input, input_target, input_other], outputs=[predictions, inner_loss, outer_loss])
+    model = Model(inputs=[input, input_target, input_other, input_all], outputs=[predictions, inner_loss, outer_loss, var_loss])
     model.compile(optimizer=SGD(lr=0.0001, momentum=0.9), 
-                  loss=["categorical_crossentropy", lambda y_true, y_pred: y_pred, lambda y_true, y_pred: y_pred], 
-                  loss_weights=[1, lambda_inner, lambda_outer], 
+                  loss=["categorical_crossentropy", lambda y_true, y_pred: y_pred, lambda y_true, y_pred: y_pred, lambda y_true, y_pred: y_pred], 
+                  loss_weights=[1, lambda_inner, lambda_outer, lambda_var], 
                   metrics=['accuracy'])
 
 # train and evaluate
@@ -145,6 +171,8 @@ for i in range(len(Y)):
     Y_train_value = np.concatenate(Y_train_value, axis = 0)
     Y_train_other_value = np.array([[i for i in range(categories) if i != num] for num in Y_train_value])
     Y_test_other_value = np.array([[i for i in range(categories) if i != num] for num in Y_test_value])
+    Y_train_all_value = np.array([list(range(categories)) for num in Y_train_value])
+    Y_test_all_value = np.array([list(range(categories)) for num in Y_test_value])
 
     print('=============shape of data==============')
     print(X_train.shape, Y_train.shape, Y_test_value.shape, Y_train_value.shape)
@@ -180,13 +208,14 @@ for i in range(len(Y)):
         #                        batch_size = batch_size, 
         #                        verbose=0)
         # clustering loss
-        model.fit([X_train, Y_train_value, Y_train_other_value],
-                  [Y_train, random_y_train, random_y_train], 
+        model.fit([X_train, Y_train_value, Y_train_other_value, Y_train_all_value],
+                  [Y_train, random_y_train, random_y_train, random_y_train], 
                   batch_size = batch_size, 
                   epochs = epochs,
                   verbose = 1, 
                   # validation_data = ([X_test, Y_test_value], [Y_test, random_y_test]),
-                  validation_data = ([X_train, Y_train_value, Y_train_other_value], [Y_train, random_y_train, random_y_train]),
+                  validation_data = ([X_train, Y_train_value, Y_train_other_value, Y_train_all_value], 
+                                     [Y_train, random_y_train, random_y_train, random_y_train]),
                   callbacks = [call_back_evaluation]
                   )
         score = model.evaluate([X_train, Y_train_value, Y_train_other_value], 
