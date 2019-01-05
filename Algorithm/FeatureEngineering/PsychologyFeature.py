@@ -7,6 +7,7 @@ from __future__ import division
 
 import os
 import math
+import functools
 
 import pickle
 import dlib
@@ -74,7 +75,7 @@ def crop_face_with_landmarks(src_dir, des_dir, target_size = (224, 224)):
 def distance(p1, p2):
     return pow(p1[0] - p2[0], 2) + pow(p1[1] - p2[1], 2)
 
-def visualize_landmark_change(img_dir, n = 20):
+def visualize_landmark_change(img_dir, n = 8):
     coords = []
     for img_name in sorted(os.listdir(img_dir)):
         img_path = img_dir + img_name
@@ -113,6 +114,13 @@ def visualize_landmark_change(img_dir, n = 20):
             diff[i][j] = int(255.0*(diff[i][j] - min_val)/(max_val - min_val))
     img = np.array(diff)
     cv2.imwrite(img_dir + 'landmark_diff.png', img)
+
+def merge_image():
+    img_dir = 'F:/FacialExpressionRecognition/Algorithm/Datasets/CK+/cohn-kanade-images/S010/002_landmark_face/'
+    img_list = ['S010_002_00000013.png', 'S010_002_00000014.png']
+    total_sum = functools.reduce(lambda x, y: x+y, [cv2.imread(img_dir+i) for i in img_list])
+    cv2.imwrite(img_dir + 'merge.png', total_sum/2.0)
+
 
 
 def face_total_distance(coords):
