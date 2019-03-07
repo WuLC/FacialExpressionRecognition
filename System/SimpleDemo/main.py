@@ -62,7 +62,7 @@ def position_and_emotion(content):
             prob = v
     top, left = d['faces'][0]['face_rectangle']['left'], d['faces'][0]['face_rectangle']['top']
     width, height = d['faces'][0]['face_rectangle']['width'], d['faces'][0]['face_rectangle']['height']
-    return True, (emotion, top, left, width, height)
+    return True, (emotion, prob, top, left, width, height)
 
 
 def main():
@@ -74,9 +74,9 @@ def main():
             detected, info = face_expression_recognition(frame)
             if detected:
                 print(info)
-                emotion, x, y, w, h = info
+                emotion, prob, x, y, w, h = info
                 cv2.rectangle(frame, (x, y), (x+w, y+h), (255, 255, 0), 2)
-                cv2.putText(frame, emotion, (x, y-20), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 0), 2)      
+                cv2.putText(frame, emotion+'({0}%)'.format(prob), (x, y-20), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 0), 2)      
             cv2.imshow('Video', frame)
         _, frame = capture.read()
         count += 1
