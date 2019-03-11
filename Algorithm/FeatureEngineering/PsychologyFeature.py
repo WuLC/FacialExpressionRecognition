@@ -15,7 +15,6 @@ import cv2
 import fire
 import numpy as np
 
-
 PREDICTOR_PATH = 'F:/FacialExpressionRecognition/System/dlibmodel/shape_predictor_68_face_landmarks.dat'
 DETECCTOR = dlib.get_frontal_face_detector()
 PREDICTOR = dlib.shape_predictor(PREDICTOR_PATH)
@@ -55,6 +54,8 @@ def extract_landmarks(src_dir, des_dir):
 def crop_face_with_landmarks(src_dir, des_dir, target_size = (224, 224)):
     if not os.path.exists(des_dir):
         os.makedirs(des_dir)
+    # get the size of rectangle that match all faces in the frame series
+    min_left, min_top, max_right, max_bottom = 9999999, 9999999, 0, 0
     for img_name in os.listdir(src_dir):
         img_path = src_dir + img_name
         des_face_path = des_dir + img_name
@@ -66,11 +67,21 @@ def crop_face_with_landmarks(src_dir, des_dir, target_size = (224, 224)):
         left, top, right, down = d.left(), d.top(), d.right(), d.bottom()
         print('detection face: left:{0} top:{1} right:{2} down:{3}'.format(left, top, right, down))
         landmarks = PREDICTOR(gray_img, d)
-        left_top = (landmarks.part(0).x, min(landmarks.part(19).y, landmarks.part(24).y))
-        right_bottom = (landmarks.part(16).x, landmarks.part(8).y) 
-        cropped_img = gray_img[left_top[1] : right_bottom[1], left_top[0] : right_bottom[0]]
+        min_left = min([min_left, landmarks.part(0).x, landmarks.part(1).x])
+        min_top = min([min_top, landmarks.part(19).y, landmarks.part(24).y])
+        max_right = max([max_right, landmarks.part(15).x, landmarks.part(16).x])
+        max_bottom = max(max_bottom, landmarks.part(8).y)
+    # crop faces with the rectangle
+    for img_name in os.listdir(src_dir):
+        img_path = src_dir + img_name
+        des_face_path = des_dir + img_name
+        img = cv2.imread(img_path)
+        gray_img = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+        #cropped_img = gray_img[min_top-10: max_bottom+10, min_left-10: max_right+10]
         resized_img = cv2.resize(cropped_img, target_size)
         cv2.imwrite(des_face_path, resized_img)
+        cv2.imwrite(des_face_path, cropped_img)
+
 
 def distance(p1, p2):
     return pow(p1[0] - p2[0], 2) + pow(p1[1] - p2[1], 2)
@@ -117,9 +128,20 @@ def visualize_landmark_change(img_dir, n = 8):
 
 def merge_image():
     img_dir = 'F:/FacialExpressionRecognition/Algorithm/Datasets/CK+/cohn-kanade-images/S010/002_landmark_face/'
-    img_list = ['S010_002_00000013.png', 'S010_002_00000014.png']
-    total_sum = functools.reduce(lambda x, y: x+y, [cv2.imread(img_dir+i) for i in img_list])
-    cv2.imwrite(img_dir + 'merge.png', total_sum/2.0)
+    img_list = sorted(os.listdir(img_dir))
+    for idx in range(len(img_list)-1):
+        pre, next = cv2.imread(img_dir+img_list[idx]), cv2.imread(img_dir+img_list[idx+1])
+        print(img_list[idx], img_list[idx+1])
+        assert pre.shape == next.shape, 'shape of two images not equal'
+        m, n, d = pre.shape
+        for i in range(m):
+            for j in range(n):
+                for k in range(d):
+                    # pre[i][j][k] + next[i][j][k] will lead to overflow in numpy for image
+                    pre[i][j][k] = int(pre[i][j][k]*0.4+ next[i][j][k]*0.6) 
+                    # if tmp != next[i][j][k]:
+                    #     print(pre[i][j][k], next[i][j][k], tmp)
+        cv2.imwrite(img_dir + '{0}merge.png'.format(idx), pre)
 
 
 
